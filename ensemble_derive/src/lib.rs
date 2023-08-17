@@ -302,21 +302,14 @@ mod tests {
     #[test]
     fn keys_extracted() {
         #[derive(Debug, Model)]
-        pub struct MyModel {
-            pub id: u8,
+        #[allow(dead_code)]
+        struct MyModel {
+            id: u8,
+            name: String,
+            email: String,
         }
 
-        assert_eq!(
-            MyModel::keys(),
-            vec![
-                "id",
-                "name",
-                "email",
-                "password",
-                "created_at",
-                "updated_at"
-            ]
-        );
+        assert_eq!(MyModel::keys(), vec!["id", "name", "email",]);
     }
 
     #[test]

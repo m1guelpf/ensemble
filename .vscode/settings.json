@@ -1,6 +1,0 @@
-{
-	"rust-analyzer.linkedProjects": [
-		"./Cargo.toml",
-		"./ensemble_derive/Cargo.toml"
-	]
-}
