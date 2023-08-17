@@ -1,0 +1,14 @@
+[package]
+name = "ensemble"
+version = "0.0.0"
+readme = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+description = "A Laravel-inspired ORM"
+
+[dependencies]
+chrono = "0.4.26"
+thiserror = "1.0.44"
+ensemble_derive = { version = "0", path = "../ensemble_derive" }

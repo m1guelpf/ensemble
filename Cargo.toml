@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["ensemble", "ensemble_derive"]
+
+[workspace.package]
+license = "MIT"
+edition = "2021"
+readme = "README.md"
+repository = "https://github.com/m1guelpf/ensemble"
+authors = ["Miguel Piedrafita <rust@miguel.build>"]
+
+[patch.crates-io]
+ensemble = { path = "ensemble" }
