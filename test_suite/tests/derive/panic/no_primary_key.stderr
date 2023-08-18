@@ -1,0 +1,8 @@
+error: No primary key found. Either mark a field with `#[model(primary)]` or name it `id`.
+ --> tests/derive/panic/no_primary_key.rs:4:16
+  |
+4 |   struct MyModel {
+  |  ________________^
+5 | |     name: String,
+6 | | }
+  | |_^

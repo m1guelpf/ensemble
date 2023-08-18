@@ -50,6 +50,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "basic-toml"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bfc506e7a2370ec239e1d072507b2a80c833083699d3c6fa176fbb4de8448c6"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -133,6 +142,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dissimilar"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "210ec60ae7d710bed8683e333e9d2855a8a56a3e9892b38bad3bb0d4d29b0d5e"
+
+[[package]]
 name = "ensemble"
 version = "0.0.0"
 dependencies = [
@@ -159,6 +174,7 @@ dependencies = [
  "automod",
  "chrono",
  "ensemble",
+ "trybuild",
  "uuid",
 ]
 
@@ -178,6 +194,12 @@ dependencies = [
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
 ]
+
+[[package]]
+name = "glob"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "hashbrown"
@@ -229,6 +251,12 @@ dependencies = [
  "equivalent",
  "hashbrown",
 ]
+
+[[package]]
+name = "itoa"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 
 [[package]]
 name = "js-sys"
@@ -346,6 +374,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ea92a5b6195c6ef2a0295ea818b312502c6fc94dde986c5553242e18fd4ce2"
 
 [[package]]
+name = "ryu"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ad4cc8da4ef723ed60bced201181d83791ad433213d8c24efffda1eec85d741"
+
+[[package]]
+name = "serde"
+version = "1.0.183"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32ac8da02677876d532745a130fc9d8e6edfa81a269b107c5b00829b91d8eb3c"
+
+[[package]]
+name = "serde_derive"
+version = "1.0.183"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aafe972d60b0b9bee71a91b92fee2d4fb3c9d7e8f6b179aa99f27203d99a4816"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "serde_json"
+version = "1.0.105"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "693151e1ac27563d6dbcec9dee9fbd5da8539b20fa14ad3752b2e6d363ace360"
+dependencies = [
+ "itoa",
+ "ryu",
+ "serde",
+]
+
+[[package]]
 name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -360,6 +422,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "termcolor"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be55cf8942feac5c765c2c993422806843c9a9a45d4d5c407ad6dd2ea95eb9b6"
+dependencies = [
+ "winapi-util",
 ]
 
 [[package]]
@@ -408,6 +479,22 @@ dependencies = [
  "indexmap",
  "toml_datetime",
  "winnow",
+]
+
+[[package]]
+name = "trybuild"
+version = "1.0.83"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6df60d81823ed9c520ee897489573da4b1d79ffbe006b8134f46de1a1aa03555"
+dependencies = [
+ "basic-toml",
+ "dissimilar",
+ "glob",
+ "once_cell",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "termcolor",
 ]
 
 [[package]]
@@ -506,6 +593,15 @@ name = "winapi-i686-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
+
+[[package]]
+name = "winapi-util"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70ec6ce85bb158151cae5e5c87f95a8e97d2c0c4b001223f33a334e3ce5de178"
+dependencies = [
+ "winapi",
+]
 
 [[package]]
 name = "winapi-x86_64-pc-windows-gnu"

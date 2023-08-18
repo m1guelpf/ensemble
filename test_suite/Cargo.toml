@@ -12,3 +12,4 @@ uuid = { version = "1.4.1", features = ["v4"] }
 
 [dev-dependencies]
 automod = "1.0.1"
+trybuild = { version = "1.0.83", features = ["diff"] }
