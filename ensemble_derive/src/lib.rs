@@ -95,6 +95,7 @@ fn impl_model(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
 
     let name = &ast.ident;
     let gen = quote! {
+        #[ensemble::async_trait]
         impl Model for #name {
             type PrimaryKey = #primary_key_type;
 
@@ -115,7 +116,9 @@ fn impl_find(primary_key: &syn::Field) -> TokenStream {
     let primary_type = &primary_key.ty;
 
     quote! {
-        fn find(id: #primary_type) -> Result<Self, ensemble::FindError> {
+        async fn find(id: #primary_type) -> Result<Self, ensemble::FindError> {
+            let conn = ensemble::connection::get().await?;
+
             unimplemented!()
         }
     }

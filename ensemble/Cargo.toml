@@ -11,4 +11,9 @@ description = "A Laravel-inspired ORM"
 [dependencies]
 chrono = "0.4.26"
 thiserror = "1.0.44"
+mysql_async = "0.32.2"
+async-trait = "0.1.73"
 ensemble_derive = { version = "0", path = "../ensemble_derive" }
+
+[dev-dependencies]
+tokio = { version = "1.32.0", features = ["rt", "macros", "rt-multi-thread"] }

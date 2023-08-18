@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use ensemble::Model;
+use std::env;
 
 #[derive(Debug, Model)]
 #[ensemble(table_name = "users_custom")]
@@ -14,7 +15,11 @@ pub struct User {
     pub updated_at: DateTime<Utc>,
 }
 
-fn main() {
-    let user = User::find(1).unwrap();
+#[tokio::main]
+async fn main() {
+    ensemble::setup(&env::var("DATABASE_URL").expect("DATABASE_URL must be set"))
+        .expect("Failed to set up database pool.");
+
+    let user = User::find(1).await.unwrap();
     dbg!(user);
 }

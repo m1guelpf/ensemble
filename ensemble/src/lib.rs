@@ -1,10 +1,19 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
+pub use async_trait::async_trait;
+use connection::ConnectError;
 pub use ensemble_derive::Model;
 
-#[derive(Debug, thiserror::Error)]
-pub enum FindError {}
+pub mod connection;
+pub use connection::setup;
 
+#[derive(Debug, thiserror::Error)]
+pub enum FindError {
+    #[error(transparent)]
+    Connection(#[from] ConnectError),
+}
+
+#[async_trait]
 pub trait Model {
     /// The type of the primary key for the model.
     type PrimaryKey;
@@ -23,7 +32,7 @@ pub trait Model {
     /// # Errors
     ///
     /// Returns an error if the model cannot be found, or if a connection to the database cannot be established.
-    fn find(id: Self::PrimaryKey) -> Result<Self, FindError>
+    async fn find(id: Self::PrimaryKey) -> Result<Self, FindError>
     where
         Self: std::marker::Sized;
 }
