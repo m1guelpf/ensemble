@@ -1,0 +1,14 @@
+[package]
+publish = false
+version = "0.0.0"
+edition.workspace = true
+name = "ensemble_test_suite"
+authors = ["Miguel Piedrafita <rust@miguel.build>"]
+
+[dependencies]
+chrono = "0.4.26"
+ensemble = { path = "../ensemble" }
+uuid = { version = "1.4.1", features = ["v4"] }
+
+[dev-dependencies]
+automod = "1.0.1"

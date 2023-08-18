@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["ensemble", "ensemble_derive"]
+members = ["ensemble", "ensemble_derive", "test_suite"]
 
 [workspace.package]
 license = "MIT"
