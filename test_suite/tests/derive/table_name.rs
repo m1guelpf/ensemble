@@ -1,21 +1,21 @@
 #![allow(dead_code)]
 
 use ensemble::Model;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[test]
 fn derives_table_name_from_model_name() {
-    #[derive(Model, Deserialize)]
+    #[derive(Model, Serialize, Deserialize)]
     struct User {
         id: u8,
     }
 
-    #[derive(Model, Deserialize)]
+    #[derive(Model, Serialize, Deserialize)]
     struct Music {
         id: u8,
     }
 
-    #[derive(Model, Deserialize)]
+    #[derive(Model, Serialize, Deserialize)]
     struct Index {
         id: u8,
     }
@@ -27,7 +27,7 @@ fn derives_table_name_from_model_name() {
 
 #[test]
 fn derived_table_name_can_be_overriden_with_attribute() {
-    #[derive(Model, Deserialize)]
+    #[derive(Model, Serialize, Deserialize)]
     #[ensemble(table_name = "custom_table")]
     struct ModelWithCustomTableName {
         id: u8,

@@ -2,12 +2,12 @@
 
 use chrono::{DateTime, TimeZone, Utc};
 use ensemble::Model;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[test]
 fn automatically_implements_default_for_all_fields() {
-    #[derive(Debug, Model, Deserialize)]
+    #[derive(Debug, Model, Serialize, Deserialize)]
     struct MyModel {
         id: u8,
         uuid: Uuid,
@@ -25,7 +25,7 @@ fn automatically_implements_default_for_all_fields() {
 
 #[test]
 fn respects_custom_default_values_via_attributes() {
-    #[derive(Debug, Model, Deserialize)]
+    #[derive(Debug, Model, Serialize, Deserialize)]
     struct MyModel {
         #[model(default = 42)]
         id: u8,
@@ -42,7 +42,7 @@ fn respects_custom_default_values_via_attributes() {
 
 #[test]
 fn initialises_marked_uuids_automatically() {
-    #[derive(Debug, Model, Deserialize)]
+    #[derive(Debug, Model, Serialize, Deserialize)]
     struct MyModel {
         #[model(uuid)]
         id: Uuid,
@@ -55,7 +55,7 @@ fn initialises_marked_uuids_automatically() {
 
 #[test]
 fn initialises_created_at_and_updated_at_when_marked() {
-    #[derive(Debug, Model, Deserialize)]
+    #[derive(Debug, Model, Serialize, Deserialize)]
     struct MyModel {
         id: u8,
 
@@ -73,7 +73,7 @@ fn initialises_created_at_and_updated_at_when_marked() {
 
 #[test]
 fn initialises_created_at_and_updated_at_when_named() {
-    #[derive(Debug, Model, Deserialize)]
+    #[derive(Debug, Model, Serialize, Deserialize)]
     struct MyModel {
         id: u8,
 

@@ -88,6 +88,9 @@ fn impl_model(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     let primary_key_type = &primary_key.ty;
 
     let all_impl = impl_all();
+    let create_impl = impl_create();
+    let save_impl = impl_save();
+    let delete_impl = impl_delete();
     let find_impl = impl_find(&primary_key);
     let keys_impl = impl_keys(struct_fields);
     let default_impl = impl_default(struct_fields)?;
@@ -103,8 +106,11 @@ fn impl_model(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
             #all_impl
             #keys_impl
             #find_impl
-            #primary_key_impl
+            #save_impl
+            #create_impl
+            #delete_impl
             #table_name_impl
+            #primary_key_impl
         }
         impl core::default::Default for #name {
             #default_impl
@@ -129,6 +135,30 @@ fn impl_find(primary_key: &syn::Field) -> TokenStream {
     quote! {
         async fn find(#ident: #primary_type) -> Result<Self, ensemble::query::Error> {
             ensemble::query::find(#ident).await
+        }
+    }
+}
+
+fn impl_create() -> TokenStream {
+    quote! {
+        async fn create(self) -> Result<Self, ensemble::query::Error> {
+            ensemble::query::create(self).await
+        }
+    }
+}
+
+fn impl_save() -> TokenStream {
+    quote! {
+        async fn save(&mut self) -> Result<(), ensemble::query::Error> {
+            ensemble::query::save(self).await
+        }
+    }
+}
+
+fn impl_delete() -> TokenStream {
+    quote! {
+        async fn delete(mut self) -> Result<(), ensemble::query::Error> {
+            ensemble::query::delete(&self).await
         }
     }
 }
@@ -170,6 +200,10 @@ fn impl_primary_key(primary: &syn::Field) -> TokenStream {
 
     quote! {
         const PRIMARY_KEY: &'static str = stringify!(#ident);
+
+        fn primary_key(&self) -> &Self::PrimaryKey {
+            &self.#ident
+        }
     }
 }
 
