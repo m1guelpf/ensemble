@@ -1,10 +1,11 @@
 #![allow(dead_code)]
 
 use ensemble::Model;
+use serde::Deserialize;
 
 #[test]
 fn returns_labeled_primary_key() {
-    #[derive(Debug, Model)]
+    #[derive(Debug, Model, Deserialize)]
     struct MyModel {
         #[model(primary)]
         my_primary_key: u8,
@@ -12,15 +13,15 @@ fn returns_labeled_primary_key() {
         id: u8,
     }
 
-    assert_eq!(MyModel::primary_key(), "my_primary_key");
+    assert_eq!(MyModel::PRIMARY_KEY, "my_primary_key");
 }
 
 #[test]
 fn marks_id_as_primary_key_if_found() {
-    #[derive(Debug, Model)]
+    #[derive(Debug, Model, Deserialize)]
     struct MyModel {
         id: u8,
     }
 
-    assert_eq!(MyModel::primary_key(), "id");
+    assert_eq!(MyModel::PRIMARY_KEY, "id");
 }

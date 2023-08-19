@@ -1,10 +1,11 @@
 #![allow(dead_code)]
 
 use ensemble::Model;
+use serde::Deserialize;
 
 #[test]
 fn extracts_the_model_fields() {
-    #[derive(Debug, Model)]
+    #[derive(Debug, Model, Deserialize)]
     struct MyModel {
         id: u8,
         name: String,

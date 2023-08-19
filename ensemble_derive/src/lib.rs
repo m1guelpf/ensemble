@@ -87,6 +87,7 @@ fn impl_model(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     let primary_key = find_primary_key(struct_fields)?;
     let primary_key_type = &primary_key.ty;
 
+    let all_impl = impl_all();
     let find_impl = impl_find(&primary_key);
     let keys_impl = impl_keys(struct_fields);
     let default_impl = impl_default(struct_fields)?;
@@ -99,6 +100,7 @@ fn impl_model(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
         impl Model for #name {
             type PrimaryKey = #primary_key_type;
 
+            #all_impl
             #keys_impl
             #find_impl
             #primary_key_impl
@@ -112,14 +114,21 @@ fn impl_model(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     Ok(gen)
 }
 
+fn impl_all() -> TokenStream {
+    quote! {
+        async fn all() -> Result<Vec<Self>, ensemble::query::Error> {
+            ensemble::query::all().await
+        }
+    }
+}
+
 fn impl_find(primary_key: &syn::Field) -> TokenStream {
     let primary_type = &primary_key.ty;
+    let ident = primary_key.ident.clone().unwrap();
 
     quote! {
-        async fn find(id: #primary_type) -> Result<Self, ensemble::FindError> {
-            let conn = ensemble::connection::get().await?;
-
-            unimplemented!()
+        async fn find(#ident: #primary_type) -> Result<Self, ensemble::query::Error> {
+            ensemble::query::find(#ident).await
         }
     }
 }
@@ -160,9 +169,7 @@ fn impl_primary_key(primary: &syn::Field) -> TokenStream {
     let ident = primary.ident.clone().unwrap();
 
     quote! {
-        fn primary_key() -> &'static str {
-            stringify!(#ident)
-        }
+        const PRIMARY_KEY: &'static str = stringify!(#ident);
     }
 }
 
@@ -171,7 +178,10 @@ fn impl_default(ast: &FieldsNamed) -> syn::Result<TokenStream> {
 
     for field in &ast.named {
         let ident = field.ident.clone().unwrap();
-        let attrs = Field::extract_attributes(&mut field.attrs.clone())?;
+        let mut attrs = Field::extract_attributes(&mut field.attrs.clone())?;
+
+        attrs.created_at |= ident == "created_at";
+        attrs.updated_at |= ident == "updated_at";
 
         defaults.push(if let Some(default) = attrs.default {
             quote_spanned! { field.span() => #ident: #default }
@@ -248,8 +258,6 @@ fn impl_table_name(struct_name: &str, custom_name: Option<String>) -> TokenStrea
         custom_name.unwrap_or_else(|| pluralize(&struct_name.to_lowercase(), 2, false));
 
     quote! {
-        fn table_name() -> &'static str {
-            #table_name
-        }
+        const TABLE_NAME: &'static str = #table_name;
     }
 }

@@ -2,11 +2,12 @@
 
 use chrono::{DateTime, TimeZone, Utc};
 use ensemble::Model;
+use serde::Deserialize;
 use uuid::Uuid;
 
 #[test]
 fn automatically_implements_default_for_all_fields() {
-    #[derive(Debug, Model)]
+    #[derive(Debug, Model, Deserialize)]
     struct MyModel {
         id: u8,
         uuid: Uuid,
@@ -24,7 +25,7 @@ fn automatically_implements_default_for_all_fields() {
 
 #[test]
 fn respects_custom_default_values_via_attributes() {
-    #[derive(Debug, Model)]
+    #[derive(Debug, Model, Deserialize)]
     struct MyModel {
         #[model(default = 42)]
         id: u8,
@@ -41,7 +42,7 @@ fn respects_custom_default_values_via_attributes() {
 
 #[test]
 fn initialises_marked_uuids_automatically() {
-    #[derive(Debug, Model)]
+    #[derive(Debug, Model, Deserialize)]
     struct MyModel {
         #[model(uuid)]
         id: Uuid,
@@ -53,14 +54,30 @@ fn initialises_marked_uuids_automatically() {
 }
 
 #[test]
-fn initialises_created_at_and_updated_at_automatically() {
-    #[derive(Debug, Model)]
+fn initialises_created_at_and_updated_at_when_marked() {
+    #[derive(Debug, Model, Deserialize)]
     struct MyModel {
         id: u8,
 
         #[model(created_at)]
         created_at: DateTime<Utc>,
         #[model(updated_at)]
+        updated_at: DateTime<Utc>,
+    }
+
+    let model = MyModel::default();
+
+    assert_ne!(model.created_at, Utc.timestamp_opt(0, 0).unwrap());
+    assert_ne!(model.updated_at, Utc.timestamp_opt(0, 0).unwrap());
+}
+
+#[test]
+fn initialises_created_at_and_updated_at_when_named() {
+    #[derive(Debug, Model, Deserialize)]
+    struct MyModel {
+        id: u8,
+
+        created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     }
 
