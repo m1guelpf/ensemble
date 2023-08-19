@@ -48,12 +48,16 @@ pub async fn all<M: Model>() -> Result<Vec<M>, Error> {
 /// # Errors
 ///
 /// Returns an error if the model cannot be found, or if a connection to the database cannot be established.
-pub async fn find<M: Model>(key: M::PrimaryKey) -> Result<M, Error> {
+pub async fn find<M: Model>(key: &M::PrimaryKey) -> Result<M, Error> {
     let mut conn = connection::get().await?;
 
     let result = conn
         .get_values(
-            &format!("SELECT * FROM {} WHERE `id` = ?", M::TABLE_NAME),
+            &format!(
+                "SELECT * FROM {} WHERE {} = ?",
+                M::TABLE_NAME,
+                M::PRIMARY_KEY
+            ),
             vec![to_value!(key)],
         )
         .await
@@ -68,6 +72,11 @@ pub async fn find<M: Model>(key: M::PrimaryKey) -> Result<M, Error> {
     }
 }
 
+/// Insert a new model into the database.
+///
+/// # Errors
+///
+/// Returns an error if the model cannot be inserted, or if a connection to the database cannot be established.
 pub async fn create<M: Model>(model: M) -> Result<M, Error> {
     let mut conn = connection::get().await?;
 
@@ -101,6 +110,11 @@ pub async fn create<M: Model>(model: M) -> Result<M, Error> {
     }
 }
 
+/// Update the model in the database.
+///
+/// # Errors
+///
+/// Returns an error if the model cannot be updated, or if a connection to the database cannot be established.
 pub async fn save<M: Model>(model: &M) -> Result<(), Error> {
     let mut conn = connection::get().await?;
 
@@ -135,6 +149,11 @@ pub async fn save<M: Model>(model: &M) -> Result<(), Error> {
     }
 }
 
+/// Delete the model from the database.
+///
+/// # Errors
+///
+/// Returns an error if the model cannot be deleted, or if a connection to the database cannot be established.
 pub async fn delete<M: Model>(model: &M) -> Result<(), Error> {
     let mut conn = connection::get().await?;
 

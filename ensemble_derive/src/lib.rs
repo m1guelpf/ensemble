@@ -1,6 +1,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
 use deluxe::{ExtractAttributes, ParseMetaItem, ParseMode};
+use inflector::Inflector;
 use pluralizer::pluralize;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
@@ -92,6 +93,7 @@ fn impl_model(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     let save_impl = impl_save();
     let delete_impl = impl_delete();
     let find_impl = impl_find(&primary_key);
+    let fresh_impl = impl_fresh(&primary_key);
     let keys_impl = impl_keys(struct_fields);
     let default_impl = impl_default(struct_fields)?;
     let primary_key_impl = impl_primary_key(&primary_key);
@@ -107,6 +109,7 @@ fn impl_model(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
             #keys_impl
             #find_impl
             #save_impl
+            #fresh_impl
             #create_impl
             #delete_impl
             #table_name_impl
@@ -133,8 +136,18 @@ fn impl_find(primary_key: &syn::Field) -> TokenStream {
     let ident = primary_key.ident.clone().unwrap();
 
     quote! {
-        async fn find(#ident: #primary_type) -> Result<Self, ensemble::query::Error> {
+        async fn find(#ident: &#primary_type) -> Result<Self, ensemble::query::Error> {
             ensemble::query::find(#ident).await
+        }
+    }
+}
+
+fn impl_fresh(primary_key: &syn::Field) -> TokenStream {
+    let ident = primary_key.ident.clone().unwrap();
+
+    quote! {
+        async fn fresh(&self) -> Result<Self, ensemble::query::Error> {
+            ensemble::query::find(&self.#ident).await
         }
     }
 }
@@ -289,7 +302,7 @@ fn impl_keys(ast: &FieldsNamed) -> TokenStream {
 
 fn impl_table_name(struct_name: &str, custom_name: Option<String>) -> TokenStream {
     let table_name =
-        custom_name.unwrap_or_else(|| pluralize(&struct_name.to_lowercase(), 2, false));
+        custom_name.unwrap_or_else(|| pluralize(&struct_name.to_snake_case(), 2, false));
 
     quote! {
         const TABLE_NAME: &'static str = #table_name;

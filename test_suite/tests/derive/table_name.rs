@@ -20,9 +20,15 @@ fn derives_table_name_from_model_name() {
         id: u8,
     }
 
+    #[derive(Model, Serialize, Deserialize)]
+    struct AirTrafficController {
+        id: u8,
+    }
+
     assert_eq!(User::TABLE_NAME, "users");
     assert_eq!(Music::TABLE_NAME, "music");
     assert_eq!(Index::TABLE_NAME, "indices");
+    assert_eq!(AirTrafficController::TABLE_NAME, "air_traffic_controllers");
 }
 
 #[test]

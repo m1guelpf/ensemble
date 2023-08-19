@@ -15,5 +15,6 @@ proc-macro = true
 syn = "2.0.28"
 quote = "1.0.32"
 deluxe = "0.5.0"
+Inflector = "0.11.4"
 pluralizer = "0.4.0"
 proc-macro2 = "1.0.66"

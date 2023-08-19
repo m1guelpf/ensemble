@@ -13,7 +13,7 @@ pub use ensemble_derive::Model;
 #[async_trait]
 pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync {
     /// The type of the primary key for the model.
-    type PrimaryKey: Display + Serialize + Send;
+    type PrimaryKey: Display + Serialize + Send + Sync;
 
     /// The name of the table for the model
     const TABLE_NAME: &'static str;
@@ -39,11 +39,32 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync {
     /// # Errors
     ///
     /// Returns an error if the model cannot be found, or if a connection to the database cannot be established.
-    async fn find(id: Self::PrimaryKey) -> Result<Self, query::Error>;
+    async fn find(id: &Self::PrimaryKey) -> Result<Self, query::Error>;
 
+    /// Insert a new model into the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the model cannot be inserted, or if a connection to the database cannot be established.
     async fn create(self) -> Result<Self, query::Error>;
 
+    /// Update the model in the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the model cannot be updated, or if a connection to the database cannot be established.
     async fn save(&mut self) -> Result<(), query::Error>;
 
+    /// Delete the model from the database.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the model cannot be deleted, or if a connection to the database cannot be established.
     async fn delete(mut self) -> Result<(), query::Error>;
+
+    /// Reload a fresh model instance from the database.
+    ///
+    /// # Errors
+    /// Returns an error if the model cannot be retrieved, or if a connection to the database cannot be established.
+    async fn fresh(&self) -> Result<Self, query::Error>;
 }
