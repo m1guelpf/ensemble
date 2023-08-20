@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     connection::{self, ConnectError},
-    Model,
+    value, Model,
 };
 use rbs::to_value;
 
@@ -13,6 +13,9 @@ pub enum Error {
 
     #[error("{0}")]
     Database(String),
+
+    #[error("The {0} field is required.")]
+    Required(&'static str),
 
     #[error("Failed to serialize model.")]
     Serialization(#[from] rbs::value::ext::Error),
@@ -77,7 +80,7 @@ pub async fn find<M: Model>(key: &M::PrimaryKey) -> Result<M, Error> {
 /// # Errors
 ///
 /// Returns an error if the model cannot be inserted, or if a connection to the database cannot be established.
-pub async fn create<M: Model>(model: M) -> Result<M, Error> {
+pub async fn create<M: Model>(model: M) -> Result<(M, M::PrimaryKey), Error> {
     let mut conn = connection::get().await?;
 
     let result = conn
@@ -92,22 +95,19 @@ pub async fn create<M: Model>(model: M) -> Result<M, Error> {
                     .collect::<Rc<_>>()
                     .join(", ")
             ),
-            to_value!(&model)
-                .into_iter()
-                .map(|(_, value)| value)
-                .collect::<Vec<_>>(),
+            value::into(&model),
         )
         .await
         .map_err(|e| Error::Database(e.to_string()))?;
 
-    if result.rows_affected == 1 {
-        Ok(model)
-    } else {
-        Err(Error::Database(format!(
+    if result.rows_affected != 1 {
+        return Err(Error::Database(format!(
             "Expected to update 1 row, updated {}",
             result.rows_affected
-        )))
+        )));
     }
+
+    Ok((model, rbs::from_value(result.last_insert_id)?))
 }
 
 /// Update the model in the database.
@@ -131,10 +131,7 @@ pub async fn save<M: Model>(model: &M) -> Result<(), Error> {
                 M::PRIMARY_KEY,
                 model.primary_key()
             ),
-            to_value!(&model)
-                .into_iter()
-                .map(|(_, value)| value)
-                .collect::<Vec<_>>(),
+            value::into(model),
         )
         .await
         .map_err(|e| Error::Database(e.to_string()))?;

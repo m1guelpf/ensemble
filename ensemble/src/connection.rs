@@ -5,7 +5,12 @@ use rbatis::{
     },
     RBatis,
 };
+#[cfg(feature = "mysql")]
 use rbdc_mysql::driver::MysqlDriver;
+#[cfg(feature = "postgres")]
+use rbdc_pg::driver::PgDriver;
+#[cfg(feature = "sqlite")]
+use rbdc_sqlite::driver::SqliteDriver;
 use std::sync::OnceLock;
 
 static DB_POOL: OnceLock<RBatis> = OnceLock::new();
@@ -26,7 +31,12 @@ pub enum SetupError {
 /// Returns an error if the database pool has already been initialized, or if the provided database URL is invalid.
 pub async fn setup(database_url: &str) -> Result<(), SetupError> {
     let rb = RBatis::new();
+    #[cfg(feature = "mysql")]
     rb.link(MysqlDriver {}, database_url).await?;
+    #[cfg(feature = "sqlite")]
+    rb.link(SqliteDriver {}, database_url).await?;
+    #[cfg(feature = "postgres")]
+    rb.link(PgDriver {}, database_url).await?;
 
     DB_POOL
         .set(rb)

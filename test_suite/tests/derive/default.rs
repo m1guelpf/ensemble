@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use chrono::{DateTime, TimeZone, Utc};
+use ensemble::types::DateTime;
 use ensemble::Model;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -12,7 +12,6 @@ fn automatically_implements_default_for_all_fields() {
         id: u8,
         uuid: Uuid,
         name: String,
-        time: DateTime<Utc>,
     }
 
     let model = MyModel::default();
@@ -20,7 +19,6 @@ fn automatically_implements_default_for_all_fields() {
     assert_eq!(model.id, u8::default());
     assert_eq!(model.uuid, Uuid::nil());
     assert_eq!(model.name, String::default());
-    assert_eq!(model.time, DateTime::<Utc>::default());
 }
 
 #[test]
@@ -60,15 +58,15 @@ fn initialises_created_at_and_updated_at_when_marked() {
         id: u8,
 
         #[model(created_at)]
-        created_at: DateTime<Utc>,
+        created_at: DateTime,
         #[model(updated_at)]
-        updated_at: DateTime<Utc>,
+        updated_at: DateTime,
     }
 
     let model = MyModel::default();
 
-    assert_ne!(model.created_at, Utc.timestamp_opt(0, 0).unwrap());
-    assert_ne!(model.updated_at, Utc.timestamp_opt(0, 0).unwrap());
+    assert_ne!(model.created_at, DateTime::from_timestamp(0));
+    assert_ne!(model.updated_at, DateTime::from_timestamp(0));
 }
 
 #[test]
@@ -77,12 +75,12 @@ fn initialises_created_at_and_updated_at_when_named() {
     struct MyModel {
         id: u8,
 
-        created_at: DateTime<Utc>,
-        updated_at: DateTime<Utc>,
+        created_at: DateTime,
+        updated_at: DateTime,
     }
 
     let model = MyModel::default();
 
-    assert_ne!(model.created_at, Utc.timestamp_opt(0, 0).unwrap());
-    assert_ne!(model.updated_at, Utc.timestamp_opt(0, 0).unwrap());
+    assert_ne!(model.created_at, DateTime::from_timestamp(0));
+    assert_ne!(model.updated_at, DateTime::from_timestamp(0));
 }

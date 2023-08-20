@@ -7,13 +7,15 @@ use std::fmt::Display;
 
 mod connection;
 pub mod query;
+pub mod types;
+mod value;
 pub use connection::setup;
 pub use ensemble_derive::Model;
 
 #[async_trait]
 pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync {
     /// The type of the primary key for the model.
-    type PrimaryKey: Display + Serialize + Send + Sync;
+    type PrimaryKey: Display + DeserializeOwned + Serialize + Send + Sync;
 
     /// The name of the table for the model
     const TABLE_NAME: &'static str;

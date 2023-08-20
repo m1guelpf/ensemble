@@ -1,60 +1,20 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
-use deluxe::{ExtractAttributes, ParseMetaItem, ParseMode};
+use deluxe::ExtractAttributes;
+use field::{Field, Fields};
 use inflector::Inflector;
 use pluralizer::pluralize;
-use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, quote_spanned};
-use syn::{
-    parse::ParseStream, parse_macro_input, spanned::Spanned, DeriveInput, Expr, FieldsNamed,
-    PathArguments, Type,
-};
+use proc_macro2::TokenStream;
+use quote::{quote, quote_spanned};
+use syn::{parse_macro_input, DeriveInput};
 
-#[derive(Debug, Default)]
-enum UuidVersion {
-    #[default]
-    None,
-    Default,
-    Version(String),
-}
-
-impl UuidVersion {
-    fn version(self) -> Option<String> {
-        match self {
-            Self::None => None,
-            Self::Default => Some("v4".to_string()),
-            Self::Version(ver) => Some(ver),
-        }
-    }
-}
-
-impl ParseMetaItem for UuidVersion {
-    fn parse_meta_item(input: ParseStream, _mode: ParseMode) -> syn::Result<Self> {
-        let version = input.parse::<syn::LitStr>()?;
-
-        Ok(Self::Version(version.value()))
-    }
-
-    fn parse_meta_item_flag(_: Span) -> syn::Result<Self> {
-        Ok(Self::Default)
-    }
-}
+mod default;
+mod field;
 
 #[derive(ExtractAttributes, Default)]
 #[deluxe(attributes(ensemble), default)]
 struct Opts {
     table_name: Option<String>,
-}
-
-#[derive(ExtractAttributes, Default)]
-#[deluxe(attributes(model), default)]
-struct Field {
-    primary: bool,
-    created_at: bool,
-    updated_at: bool,
-    #[deluxe(default)]
-    uuid: UuidVersion,
-    default: Option<Expr>,
 }
 
 #[proc_macro_derive(Model, attributes(ensemble, model))]
@@ -85,21 +45,22 @@ fn impl_model(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
         ));
     };
 
-    let primary_key = find_primary_key(struct_fields)?;
-    let primary_key_type = &primary_key.ty;
+    let fields = Fields::from(struct_fields.clone());
+    let primary_key = fields.primary_key()?;
 
     let all_impl = impl_all();
-    let create_impl = impl_create();
     let save_impl = impl_save();
+    let fresh_impl = impl_fresh();
     let delete_impl = impl_delete();
-    let find_impl = impl_find(&primary_key);
-    let fresh_impl = impl_fresh(&primary_key);
-    let keys_impl = impl_keys(struct_fields);
-    let default_impl = impl_default(struct_fields)?;
-    let primary_key_impl = impl_primary_key(&primary_key);
+    let keys_impl = impl_keys(&fields);
+    let find_impl = impl_find(primary_key);
+    let create_impl = impl_create(&fields, primary_key)?;
+    let primary_key_impl = impl_primary_key(primary_key);
+    let default_impl = default::r#impl(&ast.ident, &fields)?;
     let table_name_impl = impl_table_name(&ast.ident.to_string(), opts.table_name);
 
     let name = &ast.ident;
+    let primary_key_type = &primary_key.ty;
     let gen = quote! {
         #[ensemble::async_trait]
         impl Model for #name {
@@ -115,9 +76,7 @@ fn impl_model(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
             #table_name_impl
             #primary_key_impl
         }
-        impl core::default::Default for #name {
-            #default_impl
-        }
+        #default_impl
     };
 
     Ok(gen)
@@ -131,33 +90,60 @@ fn impl_all() -> TokenStream {
     }
 }
 
-fn impl_find(primary_key: &syn::Field) -> TokenStream {
-    let primary_type = &primary_key.ty;
-    let ident = primary_key.ident.clone().unwrap();
+fn impl_find(primary_key: &Field) -> TokenStream {
+    let ident = &primary_key.ident;
 
     quote! {
-        async fn find(#ident: &#primary_type) -> Result<Self, ensemble::query::Error> {
+        async fn find(#ident: &Self::PrimaryKey) -> Result<Self, ensemble::query::Error> {
             ensemble::query::find(#ident).await
         }
     }
 }
 
-fn impl_fresh(primary_key: &syn::Field) -> TokenStream {
-    let ident = primary_key.ident.clone().unwrap();
-
+fn impl_fresh() -> TokenStream {
     quote! {
         async fn fresh(&self) -> Result<Self, ensemble::query::Error> {
-            ensemble::query::find(&self.#ident).await
+            ensemble::query::find(self.primary_key()).await
         }
     }
 }
 
-fn impl_create() -> TokenStream {
-    quote! {
-        async fn create(self) -> Result<Self, ensemble::query::Error> {
-            ensemble::query::create(self).await
+fn impl_create(fields: &Fields, primary_key: &Field) -> syn::Result<TokenStream> {
+    let mut required = vec![];
+
+    for field in &fields.fields {
+        if field.default()?.is_some() {
+            continue;
         }
+
+        let ty = &field.ty;
+        let ident = &field.ident;
+        required.push(quote_spanned! {field.span() =>
+            if self.#ident == <#ty>::default() {
+                return Err(ensemble::query::Error::Required(stringify!(#ident)));
+            }
+        });
     }
+
+    let optional_increment = if primary_key.attr.default.increments {
+        let primary_key = &primary_key.ident;
+        quote! {
+            |(mut model, id)| {
+                model.#primary_key = id;
+
+                model
+            }
+        }
+    } else {
+        quote! { |(mut model, _)| model }
+    };
+
+    Ok(quote! {
+        async fn create(self) -> Result<Self, ensemble::query::Error> {
+            #(#required)*
+            ensemble::query::create(self).await.map(#optional_increment)
+        }
+    })
 }
 
 fn impl_save() -> TokenStream {
@@ -176,40 +162,8 @@ fn impl_delete() -> TokenStream {
     }
 }
 
-fn find_primary_key(ast: &FieldsNamed) -> syn::Result<syn::Field> {
-    let mut primary = None;
-    let mut id_field = None;
-
-    for field in &ast.named {
-        let attrs = Field::extract_attributes(&mut field.attrs.clone())?;
-
-        if attrs.primary {
-            if primary.is_some() {
-                return Err(syn::Error::new_spanned(
-                    field,
-                    "Only one field can be marked as primary",
-                ));
-            }
-
-            primary = Some(field);
-        } else if field.ident.as_ref().unwrap() == "id" {
-            id_field = Some(field);
-        }
-    }
-
-    primary
-        .or(id_field)
-        .ok_or_else(|| {
-            syn::Error::new_spanned(
-            ast,
-            "No primary key found. Either mark a field with `#[model(primary)]` or name it `id`.",
-        )
-        })
-        .cloned()
-}
-
-fn impl_primary_key(primary: &syn::Field) -> TokenStream {
-    let ident = primary.ident.clone().unwrap();
+fn impl_primary_key(primary_key: &Field) -> TokenStream {
+    let ident = &primary_key.ident;
 
     quote! {
         const PRIMARY_KEY: &'static str = stringify!(#ident);
@@ -220,76 +174,8 @@ fn impl_primary_key(primary: &syn::Field) -> TokenStream {
     }
 }
 
-fn impl_default(ast: &FieldsNamed) -> syn::Result<TokenStream> {
-    let mut defaults: Vec<TokenStream> = vec![];
-
-    for field in &ast.named {
-        let ident = field.ident.clone().unwrap();
-        let mut attrs = Field::extract_attributes(&mut field.attrs.clone())?;
-
-        attrs.created_at |= ident == "created_at";
-        attrs.updated_at |= ident == "updated_at";
-
-        defaults.push(if let Some(default) = attrs.default {
-            quote_spanned! { field.span() => #ident: #default }
-        } else if let Some(uuid) = attrs.uuid.version() {
-            let Type::Path(ty) = &field.ty else {
-                return Err(syn::Error::new_spanned(
-                    field,
-                    "Field must be of type uuid::Uuid",
-                ));
-            };
-
-            let new_fn = format_ident!("new_{uuid}");
-            quote_spanned! { field.span() => #ident: #ty::#new_fn() }
-        } else if attrs.created_at || attrs.updated_at {
-            let Type::Path(ty) = &field.ty else {
-                return Err(syn::Error::new_spanned(
-                    field,
-                    "Field must be of type chrono::DateTime<TimeZone>",
-                ));
-            };
-
-            let ty = match &ty.path.segments.last().unwrap().arguments {
-                PathArguments::AngleBracketed(args) => match args.args.first().unwrap() {
-                    syn::GenericArgument::Type(ty) => ty,
-                    _ => {
-                        return Err(syn::Error::new_spanned(
-                            field,
-                            "Field must be of type chrono::DateTime<TimeZone>",
-                        ))
-                    }
-                },
-                _ => {
-                    return Err(syn::Error::new_spanned(
-                        field,
-                        "Field must be of type chrono::DateTime<TimeZone>",
-                    ))
-                }
-            };
-
-            quote_spanned! { field.span() => #ident: #ty::now() }
-        } else {
-            quote_spanned! { field.span() => #ident: Default::default() }
-        });
-    }
-
-    Ok(quote! {
-        fn default() -> Self {
-            Self {
-                #(#defaults,)*
-            }
-        }
-    })
-}
-
-fn impl_keys(ast: &FieldsNamed) -> TokenStream {
-    let mut keys = vec![];
-
-    for field in &ast.named {
-        let ident = field.ident.clone().unwrap();
-        keys.push(ident);
-    }
+fn impl_keys(fields: &Fields) -> TokenStream {
+    let keys = fields.keys();
 
     quote! {
         fn keys() -> Vec<&'static str> {

@@ -1,19 +1,16 @@
-use chrono::serde::ts_milliseconds;
-use chrono::{DateTime, Utc};
-use ensemble::Model;
+use ensemble::{types::DateTime, Model};
 use serde::{Deserialize, Serialize};
 use std::env;
 
 #[derive(Debug, Model, Serialize, Deserialize)]
 pub struct User {
+    #[model(increments)]
     pub id: u64,
     pub name: String,
     pub email: String,
     pub password: String,
-    #[serde(with = "ts_milliseconds")]
-    pub created_at: DateTime<Utc>,
-    #[serde(with = "ts_milliseconds")]
-    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
 }
 
 #[tokio::main]
@@ -22,6 +19,7 @@ async fn main() {
         .await
         .expect("Failed to set up database pool.");
 
-    let user = User::all().await.unwrap();
-    dbg!(user);
+    let users = User::all().await.unwrap();
+
+    dbg!(users);
 }

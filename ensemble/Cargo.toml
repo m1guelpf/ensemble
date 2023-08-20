@@ -14,17 +14,31 @@ serde = "1.0.183"
 thiserror = "1.0.44"
 async-trait = "0.1.73"
 serde_json = "1.0.105"
-rbdc-mysql = { version = "4.3.12", default-features = false }
 ensemble_derive = { version = "0", path = "../ensemble_derive" }
+rbdc-pg = { version = "4.3.12", default-features = false, optional = true }
+rbdc-mysql = { version = "4.3.12", default-features = false, optional = true }
+rbdc-sqlite = { version = "4.3.12", default-features = false, optional = true }
 rbatis = { version = "4.3.12", default-features = false, features = [
     "default_mode",
 ] }
 
 [features]
-default = ["native-tls"]
-rustls = ["rbatis/tls-rustls", "rbdc-mysql/tls-rustls"]
-native-tls = ["rbatis/tls-native-tls", "rbdc-mysql/tls-native-tls"]
+mysql = ["dep:rbdc-mysql"]
+postgres = ["dep:rbdc-pg"]
+sqlite = ["dep:rbdc-sqlite"]
+default = ["native-tls", "mysql"]
+rustls = [
+    "rbatis/tls-rustls",
+    "rbdc-pg?/tls-rustls",
+    "rbdc-mysql?/tls-rustls",
+    "rbdc-sqlite?/tls-rustls",
+]
+native-tls = [
+    "rbatis/tls-native-tls",
+    "rbdc-pg?/tls-native-tls",
+    "rbdc-mysql?/tls-native-tls",
+    "rbdc-sqlite?/tls-native-tls",
+]
 
 [dev-dependencies]
-chrono = { version = "0.4.26", features = ["serde"] }
 tokio = { version = "1.32.0", features = ["rt", "macros", "rt-multi-thread"] }
