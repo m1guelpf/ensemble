@@ -13,6 +13,7 @@ mod field;
 #[derive(ExtractAttributes, Default)]
 #[deluxe(attributes(ensemble), default)]
 pub struct Opts {
+    #[deluxe(rename = table)]
     table_name: Option<String>,
 }
 

@@ -34,7 +34,7 @@ fn derives_table_name_from_model_name() {
 #[test]
 fn derived_table_name_can_be_overriden_with_attribute() {
     #[derive(Model, Serialize, Deserialize)]
-    #[ensemble(table_name = "custom_table")]
+    #[ensemble(table = "custom_table")]
     struct ModelWithCustomTableName {
         id: u8,
     }
