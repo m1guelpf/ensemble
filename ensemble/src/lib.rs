@@ -6,6 +6,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Display;
 
 mod connection;
+pub mod migrations;
 pub mod query;
 pub mod types;
 mod value;

@@ -1,0 +1,10 @@
+[package]
+name = "ensemble-migrations-example"
+publish = false
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.32.0", features = ["full"] }
+serde = { version = "1.0.184", features = ["derive"] }
+ensemble = { path = "../../ensemble", features = ["mysql"] }

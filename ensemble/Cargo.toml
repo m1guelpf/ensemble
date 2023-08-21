@@ -10,6 +10,7 @@ description = "A Laravel-inspired ORM"
 
 [dependencies]
 rbs = "4.3.3"
+tokio = "1.32.0"
 serde = "1.0.183"
 thiserror = "1.0.44"
 async-trait = "0.1.73"

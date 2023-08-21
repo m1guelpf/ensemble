@@ -13,6 +13,8 @@ use rbdc_pg::driver::PgDriver;
 use rbdc_sqlite::driver::SqliteDriver;
 use std::sync::OnceLock;
 
+pub type Connection = Object<ManagerPorxy>;
+
 static DB_POOL: OnceLock<RBatis> = OnceLock::new();
 
 #[derive(Debug, thiserror::Error)]
@@ -62,7 +64,7 @@ pub enum ConnectError {
 /// # Errors
 ///
 /// Returns an error if the database pool has not been initialized, or if an error occurs while connecting to the database.
-pub async fn get() -> Result<Object<ManagerPorxy>, ConnectError> {
+pub async fn get() -> Result<Connection, ConnectError> {
     match DB_POOL.get() {
         None => Err(ConnectError::NotInitialized),
         Some(rb) => Ok(rb.get_pool()?.get().await?),

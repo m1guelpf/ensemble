@@ -3,7 +3,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote_spanned, ToTokens};
 use syn::{spanned::Spanned, FieldsNamed, Type};
 
-use crate::default;
+use super::default;
 
 pub struct Fields {
     ast: FieldsNamed,
