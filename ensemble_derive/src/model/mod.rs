@@ -35,10 +35,6 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     let fields = Fields::from(struct_fields.clone());
     let primary_key = fields.primary_key()?;
 
-    let all_impl = impl_all();
-    let save_impl = impl_save();
-    let fresh_impl = impl_fresh();
-    let delete_impl = impl_delete();
     let keys_impl = impl_keys(&fields);
     let find_impl = impl_find(primary_key);
     let create_impl = impl_create(&fields, primary_key)?;
@@ -53,13 +49,9 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
         impl Model for #name {
             type PrimaryKey = #primary_key_type;
 
-            #all_impl
             #keys_impl
             #find_impl
-            #save_impl
-            #fresh_impl
             #create_impl
-            #delete_impl
             #table_name_impl
             #primary_key_impl
         }
@@ -69,28 +61,12 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     Ok(gen)
 }
 
-fn impl_all() -> TokenStream {
-    quote! {
-        async fn all() -> Result<Vec<Self>, ensemble::query::Error> {
-            ensemble::query::all().await
-        }
-    }
-}
-
 fn impl_find(primary_key: &Field) -> TokenStream {
     let ident = &primary_key.ident;
 
     quote! {
-        async fn find(#ident: &Self::PrimaryKey) -> Result<Self, ensemble::query::Error> {
-            ensemble::query::find(#ident).await
-        }
-    }
-}
-
-fn impl_fresh() -> TokenStream {
-    quote! {
-        async fn fresh(&self) -> Result<Self, ensemble::query::Error> {
-            ensemble::query::find(self.primary_key()).await
+        async fn find(#ident: Self::PrimaryKey) -> Result<Self, ensemble::query::Error> {
+            ensemble::query::find(&#ident).await
         }
     }
 }
@@ -131,22 +107,6 @@ fn impl_create(fields: &Fields, primary_key: &Field) -> syn::Result<TokenStream>
             ensemble::query::create(self).await.map(#optional_increment)
         }
     })
-}
-
-fn impl_save() -> TokenStream {
-    quote! {
-        async fn save(&mut self) -> Result<(), ensemble::query::Error> {
-            ensemble::query::save(self).await
-        }
-    }
-}
-
-fn impl_delete() -> TokenStream {
-    quote! {
-        async fn delete(mut self) -> Result<(), ensemble::query::Error> {
-            ensemble::query::delete(&self).await
-        }
-    }
 }
 
 fn impl_primary_key(primary_key: &Field) -> TokenStream {

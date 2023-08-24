@@ -2,9 +2,11 @@
 
 #[doc(hidden)]
 pub use async_trait::async_trait;
+use builder::Builder;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Display;
 
+pub mod builder;
 mod connection;
 pub mod migrations;
 pub mod query;
@@ -35,14 +37,16 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync {
     /// # Errors
     ///
     /// Returns an error if the query fails, or if a connection to the database cannot be established.
-    async fn all() -> Result<Vec<Self>, query::Error>;
+    async fn all() -> Result<Vec<Self>, query::Error> {
+        query::all().await
+    }
 
     /// Find a model by its primary key.
     ///
     /// # Errors
     ///
     /// Returns an error if the model cannot be found, or if a connection to the database cannot be established.
-    async fn find(id: &Self::PrimaryKey) -> Result<Self, query::Error>;
+    async fn find(key: Self::PrimaryKey) -> Result<Self, query::Error>;
 
     /// Insert a new model into the database.
     ///
@@ -56,18 +60,29 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync {
     /// # Errors
     ///
     /// Returns an error if the model cannot be updated, or if a connection to the database cannot be established.
-    async fn save(&mut self) -> Result<(), query::Error>;
+    async fn save(&mut self) -> Result<(), query::Error> {
+        query::save(self).await
+    }
 
     /// Delete the model from the database.
     ///
     /// # Errors
     ///
     /// Returns an error if the model cannot be deleted, or if a connection to the database cannot be established.
-    async fn delete(mut self) -> Result<(), query::Error>;
+    async fn delete(mut self) -> Result<(), query::Error> {
+        query::delete(&self).await
+    }
 
     /// Reload a fresh model instance from the database.
     ///
     /// # Errors
     /// Returns an error if the model cannot be retrieved, or if a connection to the database cannot be established.
-    async fn fresh(&self) -> Result<Self, query::Error>;
+    async fn fresh(&self) -> Result<Self, query::Error> {
+        query::find(self.primary_key()).await
+    }
+
+    #[must_use]
+    fn query() -> Builder {
+        Builder::new(Self::TABLE_NAME.to_string())
+    }
 }
