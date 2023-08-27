@@ -1,7 +1,7 @@
 use deluxe::ExtractAttributes;
 use inflector::Inflector;
 use pluralizer::pluralize;
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::DeriveInput;
 
@@ -9,6 +9,7 @@ use self::field::{Field, Fields};
 
 mod default;
 mod field;
+mod serde;
 
 #[derive(ExtractAttributes, Default)]
 #[deluxe(attributes(ensemble), default)]
@@ -39,15 +40,18 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     let find_impl = impl_find(primary_key);
     let create_impl = impl_create(&fields, primary_key)?;
     let primary_key_impl = impl_primary_key(primary_key);
+    let serde_impl = serde::r#impl(&ast.ident, &fields);
     let default_impl = default::r#impl(&ast.ident, &fields)?;
     let table_name_impl = impl_table_name(&ast.ident.to_string(), opts.table_name);
 
     let name = &ast.ident;
     let primary_key_type = &primary_key.ty;
     let gen = quote! {
+        #[automatically_derived]
         #[ensemble::async_trait]
         impl Model for #name {
             type PrimaryKey = #primary_key_type;
+            const NAME: &'static str = stringify!(#name);
 
             #keys_impl
             #find_impl
@@ -55,6 +59,7 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
             #table_name_impl
             #primary_key_impl
         }
+        #serde_impl
         #default_impl
     };
 

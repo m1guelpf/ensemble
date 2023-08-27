@@ -1,8 +1,7 @@
 use ensemble::{types::DateTime, Model};
-use serde::{Deserialize, Serialize};
 use std::env;
 
-#[derive(Debug, Model, Serialize, Deserialize)]
+#[derive(Debug, Model)]
 pub struct User {
     #[model(increments)]
     pub id: u64,

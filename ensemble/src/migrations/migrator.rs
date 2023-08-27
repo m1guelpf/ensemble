@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use rbs::{from_value, to_value};
 use tokio::sync::Mutex;
@@ -12,7 +12,6 @@ pub struct Migrator {
     batch: u64,
     connection: Connection,
     state: Vec<StoredMigration>,
-    state_updates: Vec<StoredMigration>,
     migrations: HashMap<String, Box<dyn Migration>>,
 }
 
@@ -36,7 +35,6 @@ impl Migrator {
             state,
             batch,
             connection: conn,
-            state_updates: vec![],
             migrations: HashMap::new(),
         })
     }
@@ -51,64 +49,48 @@ impl Migrator {
     ///
     /// Returns an error if the migrations fail, or if a connection to the database cannot be established.
     pub async fn run(mut self) -> Result<(), Error> {
-        self.connection
-            .exec("begin", vec![])
-            .await
-            .map_err(|e| Error::Database(e.to_string()))?;
-
-        MIGRATE_CONN
-            .try_lock()
-            .map_err(|_| Error::Lock)?
-            .replace(self.connection);
-
         for (name, migration) in &self.migrations {
-            if !self.state.iter().any(|m| &m.migration == name) {
-                migration.up().await?;
-                self.state_updates.push(StoredMigration {
-                    id: 0,
-                    batch: self.batch,
-                    migration: name.to_string(),
-                });
+            if self.state.iter().any(|m| &m.migration == name) {
+                continue;
             }
+
+            self.connection
+                .exec("begin", vec![])
+                .await
+                .map_err(|e| Error::Database(e.to_string()))?;
+
+            MIGRATE_CONN
+                .try_lock()
+                .map_err(|_| Error::Lock)?
+                .replace(self.connection);
+
+            migration.up().await?;
+
+            self.connection = MIGRATE_CONN
+                .try_lock()
+                .map_err(|_| Error::Lock)?
+                .take()
+                .ok_or(Error::Lock)?;
+
+            self.connection
+                .exec(
+                    "insert into migrations (migration, batch) values (?, ?)",
+                    vec![to_value!(&name), to_value!(&self.batch)],
+                )
+                .await
+                .map_err(|e| Error::Database(e.to_string()))?;
+
+            self.connection
+                .exec("commit", vec![])
+                .await
+                .map_err(|e| Error::Database(e.to_string()))?;
+
+            self.state.push(StoredMigration {
+                id: 0,
+                batch: self.batch,
+                migration: name.to_string(),
+            });
         }
-
-        self.connection = MIGRATE_CONN
-            .try_lock()
-            .map_err(|_| Error::Lock)?
-            .take()
-            .ok_or(Error::Lock)?;
-
-        self.update_state().await?;
-        self.connection
-            .exec("commit", vec![])
-            .await
-            .map_err(|e| Error::Database(e.to_string()))?;
-
-        Ok(())
-    }
-
-    async fn update_state(&mut self) -> Result<(), Error> {
-        if self.state_updates.is_empty() {
-            return Ok(());
-        }
-
-        self.connection
-            .exec(
-                &format!(
-                    "insert into migrations (migration, batch) values {}",
-                    self.state_updates
-                        .iter()
-                        .map(|_| "(?, ?)")
-                        .collect::<Rc<_>>()
-                        .join(", ")
-                ),
-                self.state_updates
-                    .iter()
-                    .flat_map(|m| [to_value!(&m.migration), to_value!(m.batch)])
-                    .collect(),
-            )
-            .await
-            .map_err(|e| Error::Database(e.to_string()))?;
 
         Ok(())
     }

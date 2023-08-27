@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use rbs::Value;
 
-use crate::{connection, query::Error, Model};
+use crate::{connection, query::Error, value, Model};
 
 pub struct Builder {
     table: String,
@@ -34,9 +34,9 @@ impl Builder {
         Op: Into<Operator>,
     {
         self.r#where.push(Where {
-            value: value.into(),
             boolean: Boolean::And,
             operator: operator.into(),
+            value: Some(value.into()),
             column: column.to_string(),
         });
 
@@ -60,9 +60,9 @@ impl Builder {
         );
 
         self.r#where.push(Where {
-            value: value.into(),
             operator: op.into(),
             boolean: Boolean::Or,
+            value: Some(value.into()),
             column: column.to_string(),
         });
 
@@ -73,10 +73,10 @@ impl Builder {
     #[must_use]
     pub fn where_not_null(mut self, column: &str) -> Self {
         self.r#where.push(Where {
-            value: Value::Null,
+            value: None,
             boolean: Boolean::And,
             column: column.to_string(),
-            operator: Operator::NotEquals,
+            operator: Operator::NotNull,
         });
 
         self
@@ -92,8 +92,14 @@ impl Builder {
 
             for (i, where_clause) in self.r#where.iter().enumerate() {
                 sql.push_str(&format!(
-                    "{} {} ?",
-                    where_clause.column, where_clause.operator
+                    "{} {} {}",
+                    where_clause.column,
+                    where_clause.operator,
+                    if where_clause.value.is_some() {
+                        "?"
+                    } else {
+                        ""
+                    }
                 ));
 
                 if i != self.r#where.len() - 1 {
@@ -112,7 +118,10 @@ impl Builder {
     /// Get the current query value bindings.
     #[must_use]
     pub fn get_bindings(&self) -> Vec<Value> {
-        self.r#where.iter().map(|w| w.value.clone()).collect()
+        self.r#where
+            .iter()
+            .filter_map(|w| w.value.clone())
+            .collect()
     }
 
     async fn run(&self) -> Result<Vec<Value>, Error> {
@@ -145,33 +154,35 @@ impl Builder {
 
         Ok(values
             .into_iter()
-            .map(rbs::from_value::<M>)
+            .map(value::from::<M>)
             .collect::<Result<Vec<M>, rbs::Error>>()?)
     }
 }
 
 #[derive(Debug)]
 struct Where {
-    value: Value,
     column: String,
     boolean: Boolean,
     operator: Operator,
+    value: Option<Value>,
 }
 
 #[derive(Debug)]
 pub enum Operator {
+    In,
+    Like,
+    NotIn,
     Equals,
+    IsNull,
+    NotNull,
+    Between,
+    NotLike,
     LessThan,
     NotEquals,
+    NotBetween,
     GreaterThan,
     LessOrEqual,
     GreaterOrEqual,
-    Like,
-    NotLike,
-    In,
-    NotIn,
-    Between,
-    NotBetween,
 }
 
 impl Display for Operator {
@@ -185,12 +196,14 @@ impl Display for Operator {
                 Self::Like => "LIKE",
                 Self::LessThan => "<",
                 Self::NotIn => "NOT IN",
-                Self::NotEquals => "!=",
+                Self::NotEquals => "<>",
                 Self::GreaterThan => ">",
                 Self::LessOrEqual => "<=",
+                Self::IsNull => "IS NULL",
                 Self::Between => "BETWEEN",
                 Self::NotLike => "NOT LIKE",
                 Self::GreaterOrEqual => ">=",
+                Self::NotNull => "IS NOT NULL",
                 Self::NotBetween => "NOT BETWEEN",
             }
         )

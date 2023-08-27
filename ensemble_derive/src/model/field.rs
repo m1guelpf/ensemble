@@ -21,6 +21,7 @@ pub struct Field {
 #[deluxe(attributes(model), default)]
 pub struct Attr {
     pub primary: bool,
+    pub column: Option<String>,
     #[deluxe(flatten)]
     pub default: default::Options,
 }

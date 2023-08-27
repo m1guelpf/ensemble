@@ -1,125 +1,15 @@
-use std::{fmt::Display, rc::Rc};
+use std::{fmt::Display, sync::mpsc};
 
 use ensemble_derive::Column;
-use rbs::to_value;
-use std::sync::mpsc;
 
-use crate::connection;
-
-use super::{migrator::MIGRATE_CONN, Error};
-
-pub struct Schema {}
-
-impl Schema {
-    /// Creates a new table.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the table cannot be created, or if a connection to the database cannot be established.
-    #[allow(clippy::unused_async)]
-    pub async fn create<F>(table_name: &str, callback: F) -> Result<(), Error>
-    where
-        F: FnOnce(&mut Table) + Send,
-    {
-        let columns = Self::get_schema(callback)?;
-        let mut conn_lock = MIGRATE_CONN.try_lock().map_err(|_| Error::Lock)?;
-        let mut conn = conn_lock.take().ok_or(Error::Lock)?;
-
-        conn.exec(
-            &format!(
-                "CREATE TABLE {} ({}) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-                table_name,
-                columns
-                    .iter()
-                    .map(Column::to_sql)
-                    .collect::<Rc<_>>()
-                    .join(", ")
-            ),
-            vec![],
-        )
-        .await
-        .map_err(|e| Error::Database(e.to_string()))?;
-
-        conn_lock.replace(conn);
-        drop(conn_lock);
-
-        Ok(())
-    }
-
-    /// Drops a table.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the table cannot be dropped, or if a connection to the database cannot be established.
-    pub async fn drop(table_name: &str) -> Result<(), Error> {
-        let mut conn = connection::get().await?;
-
-        conn.exec(&format!("DROP TABLE ?"), vec![to_value!(table_name)])
-            .await
-            .map_err(|e| Error::Database(e.to_string()))?;
-
-        Ok(())
-    }
-
-    fn get_schema<F>(callback: F) -> Result<Vec<Column>, Error>
-    where
-        F: FnOnce(&mut Table),
-    {
-        let (tx, rx) = mpsc::channel();
-        let mut table = Table { sender: Some(tx) };
-
-        let ret = std::thread::spawn(move || {
-            let mut columns = vec![];
-
-            while let Ok(column) = rx.recv() {
-                columns.push(column);
-            }
-
-            columns
-        });
-
-        callback(&mut table);
-        drop(table.sender.take());
-
-        ret.join().map_err(|_| Error::SendColumn)
-    }
-}
-
-#[derive(Debug)]
-pub struct Table {
-    sender: Option<mpsc::Sender<Column>>,
-}
-
-impl Table {
-    pub fn id(&mut self) -> Column {
-        Column::new("id".to_string(), Type::BigInteger, self.sender.clone())
-            .primary(true)
-            .unsigned(true)
-            .increments(true)
-    }
-
-    pub fn string(&mut self, name: &str) -> Column {
-        Column::new(name.to_string(), Type::String, self.sender.clone()).length(Some(255))
-    }
-
-    pub fn timestamp(&mut self, name: &str) -> Column {
-        Column::new(name.to_string(), Type::Timestamp, self.sender.clone())
-    }
-
-    pub fn timestamps(&mut self) {
-        self.timestamp("created_at")
-            .nullable(true)
-            .use_current(true);
-
-        self.timestamp("updated_at")
-            .nullable(true)
-            .use_current_on_update(true);
-    }
-}
+use super::Schemable;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Type {
+    Uuid,
+    Text,
     String,
+    Boolean,
     Timestamp,
     BigInteger,
 }
@@ -130,7 +20,10 @@ impl Display for Type {
             f,
             "{}",
             match self {
+                Self::Uuid => "uuid",
+                Self::Text => "text",
                 Self::String => "varchar",
+                Self::Boolean => "boolean",
                 Self::BigInteger => "bigint",
                 Self::Timestamp => "timestamp",
             }
@@ -156,6 +49,10 @@ pub struct Column {
     /// Set INTEGER columns as auto-increment (primary key)
     #[builder(rename = "increments", type = Type::BigInteger, needs = [primary, unique])]
     auto_increment: bool,
+    /// Automatically generate UUIDs for the column
+    #[builder(type = Type::Uuid)]
+    #[cfg(any(feature = "mysql", feature = "postgres"))]
+    uuid: bool,
     /// Add a comment to the column
     comment: Option<String>,
     /// Specify a "default" value for the column
@@ -183,7 +80,7 @@ pub struct Column {
 
     /// The channel to send the column to when it is dropped.
     #[builder(init)]
-    tx: Option<mpsc::Sender<Column>>,
+    tx: Option<mpsc::Sender<Schemable>>,
 }
 
 impl Column {
@@ -214,6 +111,20 @@ impl Column {
 
         if let Some(default) = &self.default {
             sql.push_str(&format!(" DEFAULT {default}"));
+        }
+
+        #[cfg(any(feature = "mysql", feature = "postgres"))]
+        if self.uuid {
+            assert!(
+                self.default.is_none(),
+                "cannot set a default valud and automatically generate UUIDs at the same time"
+            );
+
+            #[cfg(feature = "mysql")]
+            sql.push_str(" DEFAULT (UUID())");
+
+            #[cfg(feature = "postgres")]
+            sql.push_str(" DEFAULT (uuid_generate_v4())");
         }
 
         if self.auto_increment {
@@ -249,7 +160,7 @@ impl Column {
 impl Drop for Column {
     fn drop(&mut self) {
         if let Some(tx) = self.tx.take() {
-            tx.send(self.clone()).unwrap();
+            tx.send(Schemable::Column(self.clone())).unwrap();
             drop(tx);
         }
     }

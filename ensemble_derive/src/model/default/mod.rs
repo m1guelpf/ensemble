@@ -31,6 +31,7 @@ pub fn r#impl(name: &Ident, fields: &Fields) -> syn::Result<TokenStream> {
     }
 
     Ok(quote! {
+        #[automatically_derived]
         impl core::default::Default for #name {
             fn default() -> Self {
                 Self {

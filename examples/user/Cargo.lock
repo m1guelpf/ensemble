@@ -420,8 +420,11 @@ checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 name = "ensemble"
 version = "0.0.0"
 dependencies = [
+ "Inflector",
  "async-trait",
+ "either",
  "ensemble_derive",
+ "itertools",
  "rbatis",
  "rbdc-mysql",
  "rbdc-pg",
@@ -758,6 +761,15 @@ dependencies = [
  "equivalent",
  "hashbrown",
  "serde",
+]
+
+[[package]]
+name = "itertools"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
+dependencies = [
+ "either",
 ]
 
 [[package]]

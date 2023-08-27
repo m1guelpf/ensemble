@@ -24,6 +24,7 @@ pub struct Field {
 #[deluxe(attributes(builder), default)]
 pub struct Attr {
     pub init: bool,
+    pub into: bool,
     pub needs: Option<Expr>,
     #[deluxe(rename = type, append)]
     pub types: Vec<Expr>,

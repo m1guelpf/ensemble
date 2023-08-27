@@ -8,7 +8,7 @@ async fn main() {
         .await
         .expect("Failed to set up database pool.");
 
-    ensemble::migrate!(migrations::CreateUsersTable)
+    ensemble::migrate!(migrations::CreateUsersTable, migrations::CreatePostsTable)
         .await
         .expect("Failed to run migrations.");
 }
