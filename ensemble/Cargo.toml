@@ -18,6 +18,7 @@ Inflector = "0.11.4"
 thiserror = "1.0.44"
 async-trait = "0.1.73"
 serde_json = "1.0.105"
+validator = { version = "0.16.1", optional = true }
 ensemble_derive = { version = "0", path = "../ensemble_derive" }
 rbdc-pg = { version = "4.3.12", default-features = false, optional = true }
 rbdc-mysql = { version = "4.3.12", default-features = false, optional = true }

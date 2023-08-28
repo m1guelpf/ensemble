@@ -6,7 +6,7 @@ use syn::{parse_macro_input, DeriveInput};
 mod column;
 mod model;
 
-#[proc_macro_derive(Model, attributes(ensemble, model))]
+#[proc_macro_derive(Model, attributes(ensemble, model, validate))]
 pub fn derive_model(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);
     let opts = match deluxe::extract_attributes(&mut ast) {

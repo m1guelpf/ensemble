@@ -11,6 +11,10 @@ pub enum Error {
     #[error(transparent)]
     Connection(#[from] ConnectError),
 
+    #[cfg(feature = "validator")]
+    #[error(transparent)]
+    Validation(#[from] validator::ValidationErrors),
+
     #[error("{0}")]
     Database(String),
 

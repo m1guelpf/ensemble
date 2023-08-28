@@ -38,6 +38,7 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
 
     let keys_impl = impl_keys(&fields);
     let find_impl = impl_find(primary_key);
+    let save_impl = impl_save(fields.should_validate());
     let primary_key_impl = impl_primary_key(primary_key);
     let serde_impl = serde::r#impl(&ast.ident, &fields);
     let default_impl = default::r#impl(&ast.ident, &fields)?;
@@ -53,6 +54,7 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
             type PrimaryKey = #primary_key_type;
             const NAME: &'static str = stringify!(#name);
 
+            #save_impl
             #keys_impl
             #find_impl
             #create_impl
@@ -66,12 +68,29 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     Ok(gen)
 }
 
+fn impl_save(should_validate: bool) -> TokenStream {
+    let run_validation = if should_validate {
+        quote! {
+            self.validate()?;
+        }
+    } else {
+        TokenStream::new()
+    };
+
+    quote! {
+        async fn save(&mut self) -> Result<(), ::ensemble::query::Error> {
+            #run_validation
+            ::ensemble::query::save(self).await
+        }
+    }
+}
+
 fn impl_find(primary_key: &Field) -> TokenStream {
     let ident = &primary_key.ident;
 
     quote! {
-        async fn find(#ident: Self::PrimaryKey) -> Result<Self, ensemble::query::Error> {
-            ensemble::query::find(&#ident).await
+        async fn find(#ident: Self::PrimaryKey) -> Result<Self, ::ensemble::query::Error> {
+            ::ensemble::query::find(&#ident).await
         }
     }
 }
@@ -88,7 +107,7 @@ fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> syn::Resul
         let ident = &field.ident;
         required.push(quote_spanned! {field.span() =>
             if self.#ident == <#ty>::default() {
-                return Err(ensemble::query::Error::Required(stringify!(#ident)));
+                return Err(::ensemble::query::Error::Required(stringify!(#ident)));
             }
         });
     }
@@ -106,10 +125,19 @@ fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> syn::Resul
         quote! { |(mut model, _)| model }
     };
 
+    let run_validation = if fields.should_validate() {
+        quote! {
+            self.validate()?;
+        }
+    } else {
+        TokenStream::new()
+    };
+
     Ok(quote! {
-        async fn create(self) -> Result<Self, ensemble::query::Error> {
+        async fn create(self) -> Result<Self, ::ensemble::query::Error> {
+            #run_validation
             #(#required)*
-            ensemble::query::create(self).await.map(#optional_increment)
+            ::ensemble::query::create(self).await.map(#optional_increment)
         }
     })
 }

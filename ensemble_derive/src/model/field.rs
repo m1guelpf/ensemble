@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use deluxe::ExtractAttributes;
 use inflector::Inflector;
@@ -17,9 +17,17 @@ pub struct Fields {
 
 pub struct Field {
     pub attr: Attr,
+    ast: syn::Field,
     pub ty: syn::Type,
     pub ident: syn::Ident,
-    ast: syn::Field,
+    pub has_validation: bool,
+}
+
+#[derive(Debug, ExtractAttributes, Default)]
+#[deluxe(attributes(validate), default)]
+struct ValidationAttr {
+    #[deluxe(rest)]
+    rules: HashMap<syn::Path, syn::Expr>,
 }
 
 #[derive(ExtractAttributes, Default)]
@@ -41,6 +49,7 @@ impl Field {
     pub fn new(mut field: syn::Field) -> Self {
         let ident = field.ident.clone().unwrap();
         let mut attr = Attr::extract_attributes(&mut field.attrs).unwrap();
+        let validation = ValidationAttr::extract_attributes(&mut field.attrs).unwrap();
 
         attr.default.created_at |= ident == "created_at";
         attr.default.updated_at |= ident == "updated_at";
@@ -50,6 +59,7 @@ impl Field {
             ident,
             ty: field.ty.clone(),
             ast: field,
+            has_validation: !validation.rules.is_empty(),
         }
     }
 
@@ -175,6 +185,10 @@ impl ToTokens for Field {
 }
 
 impl Fields {
+    pub fn should_validate(&self) -> bool {
+        self.fields.iter().any(|f| f.has_validation)
+    }
+
     pub fn primary_key(&self) -> syn::Result<&Field> {
         let mut primary = None;
         let mut id_field = None;

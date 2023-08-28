@@ -85,3 +85,10 @@ impl<'de, T: Sha256Digest> Deserialize<'de> for Hashed<T> {
         })
     }
 }
+
+#[cfg(feature = "validator")]
+impl<T: Sha256Digest> validator::HasLen for &Hashed<T> {
+    fn length(&self) -> u64 {
+        self.value.len() as u64
+    }
+}
