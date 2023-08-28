@@ -422,7 +422,6 @@ version = "0.0.0"
 dependencies = [
  "Inflector",
  "async-trait",
- "either",
  "ensemble_derive",
  "itertools",
  "rbatis",
@@ -441,7 +440,6 @@ name = "ensemble-migrations-example"
 version = "0.0.0"
 dependencies = [
  "ensemble",
- "serde",
  "tokio",
 ]
 

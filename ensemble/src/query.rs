@@ -42,7 +42,7 @@ pub async fn all<M: Model>() -> Result<Vec<M>, Error> {
 
     Ok(result
         .into_iter()
-        .map(rbs::from_value)
+        .map(value::from)
         .collect::<Result<_, _>>()?)
 }
 
@@ -68,7 +68,7 @@ pub async fn find<M: Model>(key: &M::PrimaryKey) -> Result<M, Error> {
 
     match result.len() {
         0 => Err(Error::NotFound),
-        1 => Ok(rbs::from_value(
+        1 => Ok(value::from(
             result.into_iter().next().unwrap_or_else(|| unreachable!()),
         )?),
         _ => Err(Error::UniqueViolation),

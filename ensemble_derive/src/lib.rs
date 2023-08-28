@@ -1,5 +1,6 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
+use std::fmt::Display;
 use syn::{parse_macro_input, DeriveInput};
 
 mod column;
@@ -25,4 +26,40 @@ pub fn derive_column(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     column::r#impl(&ast)
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum Relationship {
+    HasOne,
+    HasMany,
+    BelongsTo,
+    BelongsToMany,
+}
+
+impl Display for Relationship {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::HasOne => "HasOne",
+                Self::HasMany => "HasMany",
+                Self::BelongsTo => "BelongsTo",
+                Self::BelongsToMany => "BelongsToMany",
+            }
+        )
+    }
+}
+
+#[allow(clippy::fallible_impl_from)]
+impl From<String> for Relationship {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "HasOne" => Self::HasOne,
+            "HasMany" => Self::HasMany,
+            "BelongsTo" => Self::BelongsTo,
+            "BelongsToMany" => Self::BelongsToMany,
+            _ => panic!("Unknown relationship found."),
+        }
+    }
 }

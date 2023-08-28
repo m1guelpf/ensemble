@@ -2,23 +2,30 @@
 
 #[doc(hidden)]
 pub use async_trait::async_trait;
+#[doc(hidden)]
+pub use serde;
+
 use builder::Builder;
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 pub mod builder;
 mod connection;
 pub mod migrations;
 pub mod query;
+pub mod relationships;
 pub mod types;
 mod value;
 pub use connection::setup;
 pub use ensemble_derive::Model;
 
 #[async_trait]
-pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync {
+pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug {
     /// The type of the primary key for the model.
-    type PrimaryKey: Display + DeserializeOwned + Serialize + Send + Sync;
+    type PrimaryKey: Display + DeserializeOwned + Serialize + Send + Sync + Clone;
+
+    /// The name of the model.
+    const NAME: &'static str;
 
     /// The name of the table for the model
     const TABLE_NAME: &'static str;
@@ -81,6 +88,7 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync {
         query::find(self.primary_key()).await
     }
 
+    /// Begin querying the model.
     #[must_use]
     fn query() -> Builder {
         Builder::new(Self::TABLE_NAME.to_string())

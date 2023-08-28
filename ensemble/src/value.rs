@@ -5,10 +5,10 @@ use crate::Model;
 pub fn into<M: Model>(model: &M) -> Vec<Value> {
     to_value!(model)
         .into_iter()
-        .map(into_value)
+        .map(|(_, value)| value)
         .collect::<Vec<_>>()
 }
 
-fn into_value((_, value): (Value, Value)) -> Value {
-    value
+pub fn from<M: Model>(value: Value) -> Result<M, rbs::Error> {
+    rbs::from_value::<M>(value)
 }

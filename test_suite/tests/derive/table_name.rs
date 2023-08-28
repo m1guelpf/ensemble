@@ -4,22 +4,22 @@ use ensemble::Model;
 
 #[test]
 fn derives_table_name_from_model_name() {
-    #[derive(Model)]
+    #[derive(Debug, Model)]
     struct User {
         id: u8,
     }
 
-    #[derive(Model)]
+    #[derive(Debug, Model)]
     struct Music {
         id: u8,
     }
 
-    #[derive(Model)]
+    #[derive(Debug, Model)]
     struct Index {
         id: u8,
     }
 
-    #[derive(Model)]
+    #[derive(Debug, Model)]
     struct AirTrafficController {
         id: u8,
     }
@@ -32,7 +32,7 @@ fn derives_table_name_from_model_name() {
 
 #[test]
 fn derived_table_name_can_be_overriden_with_attribute() {
-    #[derive(Model)]
+    #[derive(Debug, Model)]
     #[ensemble(table = "custom_table")]
     struct ModelWithCustomTableName {
         id: u8,

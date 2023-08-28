@@ -1,0 +1,43 @@
+use std::env;
+
+use ensemble::{
+    relationships::{BelongsToMany, HasMany, Relationship},
+    types::DateTime,
+    Model,
+};
+
+#[derive(Debug, Model)]
+pub struct User {
+    #[model(increments)]
+    pub id: u64,
+    pub name: String,
+    pub email: String,
+    pub password: String,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
+    #[model(foreign_key = "author_id")]
+    pub posts: HasMany<User, Post>,
+}
+
+#[derive(Debug, Model)]
+pub struct Post {
+    #[model(increments)]
+    pub id: u64,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
+
+    #[model(column = "author_id")]
+    pub user: BelongsToMany<Post, User>,
+}
+
+#[tokio::main]
+async fn main() {
+    ensemble::setup(&env::var("DATABASE_URL").expect("DATABASE_URL must be set"))
+        .await
+        .expect("Failed to set up database pool.");
+
+    let mut user = User::find(1).await.expect("Failed to find user.");
+    let posts = user.posts.get().await.expect("Failed to get posts.");
+
+    dbg!(posts);
+}

@@ -38,10 +38,10 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
 
     let keys_impl = impl_keys(&fields);
     let find_impl = impl_find(primary_key);
-    let create_impl = impl_create(&fields, primary_key)?;
     let primary_key_impl = impl_primary_key(primary_key);
     let serde_impl = serde::r#impl(&ast.ident, &fields);
     let default_impl = default::r#impl(&ast.ident, &fields)?;
+    let create_impl = impl_create(&ast.ident, &fields, primary_key)?;
     let table_name_impl = impl_table_name(&ast.ident.to_string(), opts.table_name);
 
     let name = &ast.ident;
@@ -76,11 +76,11 @@ fn impl_find(primary_key: &Field) -> TokenStream {
     }
 }
 
-fn impl_create(fields: &Fields, primary_key: &Field) -> syn::Result<TokenStream> {
+fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> syn::Result<TokenStream> {
     let mut required = vec![];
 
     for field in &fields.fields {
-        if field.default()?.is_some() {
+        if field.default(name, primary_key)?.is_some() {
             continue;
         }
 

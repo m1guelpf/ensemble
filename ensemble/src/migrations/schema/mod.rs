@@ -1,6 +1,5 @@
-use either::Either;
 use inflector::Inflector;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use rbs::to_value;
 use std::{any::type_name, sync::mpsc};
 
@@ -161,9 +160,9 @@ impl Table {
 
         let index = ForeignIndex::new(name.to_string(), self.sender.clone());
 
-        // if the column name is of the form `table_id`, we extract and set the table name and foreign column name
-        if let Some((table, column)) = name.split_once('_') {
-            index.on(&table.to_plural()).references(column)
+        // if the column name is of the form `resource_id`, we extract and set the table name and foreign column name
+        if let Some((resource, column)) = name.split_once('_') {
+            index.on(&resource.to_plural()).references(column)
         } else {
             index
         }

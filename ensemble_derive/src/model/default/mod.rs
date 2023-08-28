@@ -20,11 +20,12 @@ pub mod uuid;
 
 pub fn r#impl(name: &Ident, fields: &Fields) -> syn::Result<TokenStream> {
     let mut defaults = vec![];
+    let primary_key = fields.primary_key()?;
 
     for field in &fields.fields {
         let ident = &field.ident;
         let default = field
-            .default()?
+            .default(name, primary_key)?
             .unwrap_or_else(|| quote_spanned! { field.span() => Default::default() });
 
         defaults.push(quote_spanned! { field.span() => #ident: #default });

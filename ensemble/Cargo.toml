@@ -11,7 +11,6 @@ description = "A Laravel-inspired ORM"
 [dependencies]
 rbs = "4.3.3"
 tokio = "1.32.0"
-either = "1.9.0"
 serde = "1.0.183"
 itertools = "0.11.0"
 Inflector = "0.11.4"
@@ -43,6 +42,3 @@ native-tls = [
     "rbdc-mysql?/tls-native-tls",
     "rbdc-sqlite?/tls-native-tls",
 ]
-
-[dev-dependencies]
-tokio = { version = "1.32.0", features = ["rt", "macros", "rt-multi-thread"] }

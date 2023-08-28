@@ -4,8 +4,10 @@ use rbs::Value;
 
 use crate::{connection, query::Error, value, Model};
 
+/// The Query Builder.
 pub struct Builder {
     table: String,
+    join: Vec<Join>,
     r#where: Vec<Where>,
     take: Option<usize>,
 }
@@ -15,6 +17,7 @@ impl Builder {
         Self {
             table,
             take: None,
+            join: vec![],
             r#where: vec![],
         }
     }
@@ -82,10 +85,39 @@ impl Builder {
         self
     }
 
+    /// Add an inner join to the query.
+    #[must_use]
+    pub fn join<Op: Into<Operator>>(
+        mut self,
+        column: &str,
+        first: &str,
+        op: Op,
+        second: &str,
+    ) -> Self {
+        self.join.push(Join {
+            operator: op.into(),
+            first: first.to_string(),
+            column: column.to_string(),
+            r#type: JoinType::Inner,
+            second: second.to_string(),
+        });
+
+        self
+    }
+
     /// Get the SQL representation of the query.
     #[must_use]
     pub fn to_sql(&self) -> String {
         let mut sql = format!("SELECT * FROM {}", self.table);
+
+        if !self.join.is_empty() {
+            for join in &self.join {
+                sql.push_str(&format!(
+                    " {} {} ON {} {} {}",
+                    join.r#type, join.column, join.first, join.operator, join.second
+                ));
+            }
+        }
 
         if !self.r#where.is_empty() {
             sql.push_str(" WHERE ");
@@ -159,6 +191,32 @@ impl Builder {
     }
 }
 
+/// Available join types.
+#[derive(Debug)]
+enum JoinType {
+    /// The `INNER JOIN` type.
+    Inner,
+}
+
+impl Display for JoinType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Inner => write!(f, "INNER JOIN"),
+        }
+    }
+}
+
+/// A join clause.
+#[derive(Debug)]
+struct Join {
+    column: String,
+    first: String,
+    second: String,
+    r#type: JoinType,
+    operator: Operator,
+}
+
+/// A where clause.
 #[derive(Debug)]
 struct Where {
     column: String,
@@ -167,21 +225,36 @@ struct Where {
     value: Option<Value>,
 }
 
+/// Available operators for where clauses.
 #[derive(Debug)]
 pub enum Operator {
+    /// The `IN` operator.
     In,
+    /// The `LIKE` operator.
     Like,
+    /// The `NOT IN` operator.
     NotIn,
+    /// The `=` operator.
     Equals,
+    /// The `IS NULL` operator.
     IsNull,
+    /// The `IS NOT NULL` operator.
     NotNull,
+    /// The `BETWEEN` operator.
     Between,
+    /// The `NOT LIKE` operator.
     NotLike,
+    /// The `<` operator.
     LessThan,
+    /// The `<>` operator.
     NotEquals,
+    /// The `NOT BETWEEN` operator.
     NotBetween,
+    /// The `>` operator.
     GreaterThan,
+    /// The `<=` operator.
     LessOrEqual,
+    /// The `>=` operator.
     GreaterOrEqual,
 }
 
