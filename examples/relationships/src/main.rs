@@ -2,7 +2,7 @@ use std::env;
 
 use ensemble::{
     relationships::{BelongsTo, HasMany, Relationship},
-    types::DateTime,
+    types::{DateTime, Hashed},
     Model,
 };
 
@@ -12,7 +12,7 @@ pub struct User {
     pub id: u64,
     pub name: String,
     pub email: String,
-    pub password: String,
+    pub password: Hashed<String>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
     #[model(foreign_key = "author_id")]
