@@ -2,7 +2,7 @@ use deluxe::ExtractAttributes;
 use inflector::Inflector;
 use pluralizer::pluralize;
 use proc_macro2::{Ident, TokenStream};
-use quote::{quote, quote_spanned};
+use quote::{quote, quote_spanned, ToTokens};
 use syn::DeriveInput;
 
 use self::field::{Field, Fields};
@@ -128,6 +128,7 @@ fn impl_find(primary_key: &Field) -> TokenStream {
 
 fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> syn::Result<TokenStream> {
     let mut required = vec![];
+    let is_primary_u64 = (&primary_key.ty).into_token_stream().to_string() == "u64";
 
     for field in &fields.fields {
         if field.default(name, primary_key)?.is_some() {
@@ -143,7 +144,12 @@ fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> syn::Resul
         });
     }
 
-    let optional_increment = if primary_key.attr.default.increments {
+    let optional_increment = if primary_key
+        .attr
+        .default
+        .incrementing
+        .unwrap_or(is_primary_u64)
+    {
         let primary_key = &primary_key.ident;
         quote! {
             |(mut model, id)| {

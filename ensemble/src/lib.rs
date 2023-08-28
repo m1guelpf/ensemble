@@ -1,3 +1,5 @@
+//! A Laravel-inspired ORM for Rust
+#![doc = include_str!("../docs/getting-started.md")]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
 #[doc(hidden)]

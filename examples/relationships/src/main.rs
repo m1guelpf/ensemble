@@ -8,7 +8,6 @@ use ensemble::{
 
 #[derive(Debug, Model)]
 pub struct User {
-    #[model(increments)]
     pub id: u64,
     pub name: String,
     pub email: String,
@@ -21,7 +20,7 @@ pub struct User {
 
 #[derive(Debug, Model)]
 pub struct Post {
-    #[model(increments)]
+    #[model(incrementing)]
     pub id: u64,
     pub created_at: DateTime,
     pub updated_at: DateTime,

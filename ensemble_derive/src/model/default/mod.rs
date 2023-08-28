@@ -8,7 +8,7 @@ use super::field::Fields;
 #[derive(Debug, ParseMetaItem, Default)]
 #[deluxe(default)]
 pub struct Options {
-    pub increments: bool,
+    pub incrementing: Option<bool>,
     pub created_at: bool,
     pub updated_at: bool,
     #[deluxe(rename = default)]

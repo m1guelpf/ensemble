@@ -78,6 +78,8 @@ impl Field {
 
     pub fn default(&self, name: &Ident, primary_key: &Self) -> syn::Result<Option<TokenStream>> {
         let attrs = &self.attr.default;
+        let is_primary = primary_key.ident == self.ident;
+        let is_u64 = self.ty.to_token_stream().to_string() == "u64";
 
         Ok(if let Some(default) = &attrs.value {
             Some(quote_spanned! { self.span() => #default })
@@ -98,7 +100,7 @@ impl Field {
 
             let new_fn = format_ident!("new_{uuid}");
             Some(quote_spanned! { self.span() => <#ty>::#new_fn() })
-        } else if attrs.increments {
+        } else if attrs.incrementing.unwrap_or(is_primary && is_u64) {
             Some(quote_spanned! { self.span() => 0 })
         } else if attrs.created_at || attrs.updated_at {
             let Type::Path(ty) = &self.ty else {

@@ -1,6 +1,6 @@
-use std::fmt::Display;
-
+use itertools::Itertools;
 use rbs::Value;
+use std::fmt::Display;
 
 use crate::{connection, query::Error, value, Model};
 
@@ -8,6 +8,7 @@ use crate::{connection, query::Error, value, Model};
 pub struct Builder {
     table: String,
     join: Vec<Join>,
+    order: Vec<Order>,
     r#where: Vec<Where>,
     take: Option<usize>,
 }
@@ -18,6 +19,7 @@ impl Builder {
             table,
             take: None,
             join: vec![],
+            order: vec![],
             r#where: vec![],
         }
     }
@@ -105,10 +107,25 @@ impl Builder {
         self
     }
 
+    /// Add an "order by" clause to the query.
+    #[must_use]
+    pub fn order_by<Dir: Into<Direction>>(mut self, column: &str, direction: Dir) -> Self {
+        self.order.push(Order {
+            column: column.to_string(),
+            direction: direction.into(),
+        });
+
+        self
+    }
+
     /// Get the SQL representation of the query.
     #[must_use]
-    pub fn to_sql(&self) -> String {
-        let mut sql = format!("SELECT * FROM {}", self.table);
+    pub fn to_sql(&self, r#type: QueryType) -> String {
+        let mut sql = match r#type {
+            QueryType::Select => format!("SELECT * FROM {}", self.table),
+            QueryType::Update => String::new(), // handled in update()
+            QueryType::Delete => format!("DELETE FROM {}", self.table),
+        };
 
         if !self.join.is_empty() {
             for join in &self.join {
@@ -140,6 +157,18 @@ impl Builder {
             }
         }
 
+        if !self.order.is_empty() {
+            sql.push_str(" ORDER BY ");
+
+            sql.push_str(
+                &self
+                    .order
+                    .iter()
+                    .map(|order| format!("{} {}", order.column, order.direction))
+                    .join(", "),
+            );
+        }
+
         if let Some(take) = self.take {
             sql.push_str(&format!(" LIMIT {take}"));
         }
@@ -159,7 +188,7 @@ impl Builder {
     async fn run(&self) -> Result<Vec<Value>, Error> {
         let mut conn = connection::get().await?;
 
-        conn.get_values(&self.to_sql(), self.get_bindings())
+        conn.get_values(&self.to_sql(QueryType::Select), self.get_bindings())
             .await
             .map_err(|s| Error::Database(s.to_string()))
     }
@@ -189,6 +218,103 @@ impl Builder {
             .map(value::from::<M>)
             .collect::<Result<Vec<M>, rbs::Error>>()?)
     }
+
+    /// Update records in the database. Returns the number of affected rows.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails, or if a connection to the database cannot be established.
+    pub async fn update(self, values: &[(&str, rbs::Value)]) -> Result<u64, Error> {
+        let mut conn = connection::get().await?;
+        let sql = self.to_sql(QueryType::Update);
+
+        conn.exec(
+            &format!(
+                "UPDATE {} SET {} {sql}",
+                self.table,
+                values
+                    .iter()
+                    .map(|(column, _)| format!("{} = ?", column))
+                    .join(", "),
+            ),
+            values
+                .iter()
+                .map(|(_, value)| value.clone())
+                .chain(self.get_bindings())
+                .collect(),
+        )
+        .await
+        .map_err(|e| Error::Database(e.to_string()))
+        .map(|r| r.rows_affected)
+    }
+
+    /// Delete records from the database. Returns the number of affected rows.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails, or if a connection to the database cannot be established.
+    pub async fn delete(self) -> Result<u64, Error> {
+        let mut conn = connection::get().await?;
+
+        conn.exec(&self.to_sql(QueryType::Delete), self.get_bindings())
+            .await
+            .map_err(|e| Error::Database(e.to_string()))
+            .map(|r| r.rows_affected)
+    }
+
+    /// Run a truncate statement on the table. Returns the number of affected rows.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails, or if a connection to the database cannot be established.
+    pub async fn truncate(self) -> Result<u64, Error> {
+        let mut conn = connection::get().await?;
+
+        conn.exec(&format!("TRUNCATE TABLE {}", self.table), vec![])
+            .await
+            .map_err(|e| Error::Database(e.to_string()))
+            .map(|r| r.rows_affected)
+    }
+}
+
+/// Available sort directions.
+#[derive(Debug)]
+pub enum Direction {
+    Ascending,
+    Descending,
+}
+
+impl Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ascending => write!(f, "ASC"),
+            Self::Descending => write!(f, "DESC"),
+        }
+    }
+}
+
+impl From<String> for Direction {
+    fn from(value: String) -> Self {
+        value.as_str().into()
+    }
+}
+
+#[allow(clippy::fallible_impl_from)]
+impl From<&str> for Direction {
+    fn from(value: &str) -> Self {
+        match value.to_uppercase().as_str() {
+            "ASC" | "ASCENDING" => Self::Ascending,
+            "DESC" | "DESCENDING" => Self::Descending,
+
+            _ => panic!("Invalid direction {value}"),
+        }
+    }
+}
+
+/// An order clause.
+struct Order {
+    column: String,
+    direction: Direction,
 }
 
 /// Available join types.
@@ -204,6 +330,13 @@ impl Display for JoinType {
             Self::Inner => write!(f, "INNER JOIN"),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum QueryType {
+    Select,
+    Update,
+    Delete,
 }
 
 /// A join clause.
@@ -288,6 +421,11 @@ impl From<String> for Operator {
         value.as_str().into()
     }
 }
+impl From<char> for Operator {
+    fn from(value: char) -> Self {
+        value.to_string().into()
+    }
+}
 
 #[allow(clippy::fallible_impl_from)]
 impl From<&str> for Operator {
@@ -323,5 +461,11 @@ impl Display for Boolean {
             Self::Or => write!(f, "OR"),
             Self::And => write!(f, "AND"),
         }
+    }
+}
+
+impl AsRef<Self> for Builder {
+    fn as_ref(&self) -> &Self {
+        self
     }
 }

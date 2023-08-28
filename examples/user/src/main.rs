@@ -7,7 +7,6 @@ use validator::Validate;
 
 #[derive(Debug, Model, Validate)]
 pub struct User {
-    #[model(increments)]
     pub id: u64,
     pub name: String,
     pub email: String,
