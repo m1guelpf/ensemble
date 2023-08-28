@@ -1,7 +1,7 @@
 use std::env;
 
 use ensemble::{
-    relationships::{BelongsToMany, HasMany, Relationship},
+    relationships::{BelongsTo, HasMany, Relationship},
     types::DateTime,
     Model,
 };
@@ -27,7 +27,7 @@ pub struct Post {
     pub updated_at: DateTime,
 
     #[model(column = "author_id")]
-    pub user: BelongsToMany<Post, User>,
+    pub user: BelongsTo<Post, User>,
 }
 
 #[tokio::main]
