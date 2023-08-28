@@ -30,9 +30,14 @@ struct ValidationAttr {
     rules: HashMap<syn::Path, syn::Expr>,
 }
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(ExtractAttributes, Default)]
 #[deluxe(attributes(model), default)]
 pub struct Attr {
+    #[cfg(feature = "json")]
+    pub hide: bool,
+    #[cfg(feature = "json")]
+    pub show: bool,
     pub primary: bool,
     pub column: Option<String>,
     pub local_key: Option<String>,
@@ -51,6 +56,10 @@ impl Field {
         let mut attr = Attr::extract_attributes(&mut field.attrs).unwrap();
         let validation = ValidationAttr::extract_attributes(&mut field.attrs).unwrap();
 
+        #[cfg(feature = "json")]
+        {
+            attr.hide |= ident == "password";
+        }
         attr.default.created_at |= ident == "created_at";
         attr.default.updated_at |= ident == "updated_at";
 

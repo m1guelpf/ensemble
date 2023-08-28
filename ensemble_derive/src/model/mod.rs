@@ -36,6 +36,11 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     let fields = Fields::from(struct_fields.clone());
     let primary_key = fields.primary_key()?;
 
+    #[cfg(feature = "json")]
+    let impl_json = impl_json(&fields);
+    #[cfg(not(feature = "json"))]
+    let impl_json = TokenStream::new();
+
     let keys_impl = impl_keys(&fields);
     let find_impl = impl_find(primary_key);
     let save_impl = impl_save(fields.should_validate());
@@ -54,6 +59,7 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
             type PrimaryKey = #primary_key_type;
             const NAME: &'static str = stringify!(#name);
 
+            #impl_json
             #save_impl
             #keys_impl
             #find_impl
@@ -66,6 +72,31 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     };
 
     Ok(gen)
+}
+
+#[cfg(feature = "json")]
+fn impl_json(fields: &Fields) -> TokenStream {
+    let remove_fields = fields
+        .fields
+        .iter()
+        .filter(|field| field.attr.hide && !field.attr.show)
+        .map(|f| {
+            let ident = &f.ident;
+            quote_spanned! {f.span() => value.remove(stringify!(#ident)); }
+        });
+
+    quote! {
+        fn json(&self) -> ::ensemble::serde_json::Value {
+            let value = ::ensemble::serde_json::to_value(self).unwrap();
+            let ::ensemble::serde_json::Value::Object(mut value) = value else {
+                return value;
+            };
+
+            #(#remove_fields)*
+
+            ::ensemble::serde_json::Value::Object(value)
+        }
+    }
 }
 
 fn impl_save(should_validate: bool) -> TokenStream {

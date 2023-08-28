@@ -4,6 +4,9 @@
 pub use async_trait::async_trait;
 #[doc(hidden)]
 pub use serde;
+#[doc(hidden)]
+#[cfg(feature = "json")]
+pub use serde_json;
 
 use builder::Builder;
 use serde::{de::DeserializeOwned, Serialize};
@@ -92,5 +95,15 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug {
     #[must_use]
     fn query() -> Builder {
         Builder::new(Self::TABLE_NAME.to_string())
+    }
+
+    #[cfg(feature = "json")]
+    /// Convert the model to a JSON value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the model cannot be converted to JSON.
+    fn json(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap()
     }
 }
