@@ -1,6 +1,6 @@
 [package]
 name = "ensemble"
-version = "0.0.0"
+version = "0.0.1"
 readme = { workspace = true }
 edition = { workspace = true }
 authors = { workspace = true }
