@@ -27,6 +27,11 @@ rbatis = { version = "4.3.12", default-features = false, features = [
     "default_mode",
 ] }
 
+[dev-dependencies]
+axum = "0.6.20"
+uuid = { version = "1.4.1", features = ["v3"] }
+
+
 [features]
 default = ["native-tls", "mysql", "json"]
 

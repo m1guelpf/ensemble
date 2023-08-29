@@ -1,16 +1,45 @@
 use inflector::Inflector;
+use rbs::Value;
 use serde::Serialize;
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug};
 
-use super::Relationship;
-use crate::{query::Error, Model};
+use super::{find_related, Relationship};
+use crate::{builder::Builder, query::Error, Model};
 
+/// ## A Belongs To relationship.
+/// A belongs to relationship is used to define relationships where a model is the child to a single models. For example, a website may belong to a user.
+///
+/// To define this relationship, we will place a user field on the Site model. The comments field should be of type `BelongsTo<Site, User>`.
+///
+/// ## Example
+///
+/// ```rust
+/// # use ensemble::{Model, relationships::BelongsTo};
+/// # #[derive(Debug, Model)]
+/// # struct User {
+/// #   id: u64,
+/// # }
+/// #[derive(Debug, Model)]
+/// struct Site {
+///   id: u64,
+///   url: String,
+///   user: BelongsTo<Site, User>
+/// }
+///
+/// # async fn call() -> Result<(), ensemble::query::Error> {
+/// let mut site = Site::find(1).await?;
+///
+/// site.user().await?;
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone, Default)]
 pub struct BelongsTo<Local: Model, Related: Model> {
     foreign_key: String,
     relation: Option<Related>,
-    value: Related::PrimaryKey,
     _local: std::marker::PhantomData<Local>,
+    /// The value of the local model's related key.
+    pub value: Related::PrimaryKey,
 }
 
 #[async_trait::async_trait]
@@ -31,24 +60,50 @@ impl<Local: Model, Related: Model> Relationship for BelongsTo<Local, Related> {
         Self {
             value,
             relation,
+            foreign_key,
             _local: std::marker::PhantomData,
-            foreign_key: format!("{}.{}", Local::TABLE_NAME, foreign_key),
         }
+    }
+
+    fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
+        Related::query()
+            .r#where(
+                &format!("{}.{}", Local::TABLE_NAME, self.foreign_key),
+                "in",
+                related,
+            )
+            .limit(1)
+    }
+
+    fn query(&self) -> Result<Builder, Error> {
+        let query = Related::query()
+            .r#where(
+                &format!("{}.{}", Local::TABLE_NAME, self.foreign_key),
+                "=",
+                self.value.clone(),
+            )
+            .limit(1);
+
+        Ok(query)
     }
 
     /// Get the related model.
     async fn get(&mut self) -> Result<&Self::Value, Error> {
         if self.relation.is_none() {
-            let relation = Related::query()
-                .r#where(&self.foreign_key, "=", rbs::to_value(self.value.clone())?)
-                .first()
-                .await?
-                .ok_or(Error::NotFound)?;
+            let relation = self.query()?.first().await?.ok_or(Error::NotFound)?;
 
             self.relation = Some(relation);
         }
 
         Ok(self.relation.as_ref().unwrap())
+    }
+
+    fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
+        let related = find_related(related, &self.foreign_key, &self.value, true)?;
+
+        self.relation = related.into_iter().next();
+
+        Ok(())
     }
 }
 

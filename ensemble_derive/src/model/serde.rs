@@ -159,13 +159,8 @@ fn visitor_deserialize(
 
     let model_keys = fields.fields.iter().map(|f| {
         let ident = &f.ident;
-        let column = f
-            .attr
-            .column
-            .as_ref()
-            .map_or(f.ident.clone(), |v| Ident::new(v, f.span()));
         let Some((relationship_type, related, relationship_key)) = &f.relationship(primary_key) else {
-            return quote_spanned! {f.span()=> #ident: #column };
+            return quote_spanned! {f.span()=> #ident: #ident };
         };
         let relationship_ident = Ident::new(&relationship_type.to_string(), f.span());
 

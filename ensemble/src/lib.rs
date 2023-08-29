@@ -1,18 +1,24 @@
 //! A Laravel-inspired ORM for Rust
 #![doc = include_str!("../docs/getting-started.md")]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
+#![allow(clippy::inconsistent_struct_constructor)]
 
 #[doc(hidden)]
 pub use async_trait::async_trait;
+#[doc(hidden)]
+pub use rbs::{to_value, Value};
 #[doc(hidden)]
 pub use serde;
 #[doc(hidden)]
 #[cfg(feature = "json")]
 pub use serde_json;
 
-use builder::Builder;
+use builder::{Builder, EagerLoad};
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::{Debug, Display};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+};
 
 pub mod builder;
 mod connection;
@@ -25,7 +31,7 @@ pub use connection::setup;
 pub use ensemble_derive::Model;
 
 #[async_trait]
-pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug {
+pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + Default {
     /// The type of the primary key for the model.
     type PrimaryKey: Display + DeserializeOwned + Serialize + Send + Sync + Clone;
 
@@ -50,7 +56,7 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug {
     ///
     /// Returns an error if the query fails, or if a connection to the database cannot be established.
     async fn all() -> Result<Vec<Self>, query::Error> {
-        query::all().await
+        Self::query().get().await
     }
 
     /// Find a model by its primary key.
@@ -72,9 +78,7 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug {
     /// # Errors
     ///
     /// Returns an error if the model cannot be updated, or if a connection to the database cannot be established.
-    async fn save(&mut self) -> Result<(), query::Error> {
-        query::save(self).await
-    }
+    async fn save(&mut self) -> Result<(), query::Error>;
 
     /// Delete the model from the database.
     ///
@@ -82,16 +86,23 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug {
     ///
     /// Returns an error if the model cannot be deleted, or if a connection to the database cannot be established.
     async fn delete(mut self) -> Result<(), query::Error> {
-        query::delete(&self).await
+        let rows_affected = Self::query()
+            .r#where(Self::PRIMARY_KEY, "=", to_value!(self.primary_key()))
+            .delete()
+            .await?;
+
+        if rows_affected != 1 {
+            return Err(query::Error::UniqueViolation);
+        }
+
+        Ok(())
     }
 
     /// Reload a fresh model instance from the database.
     ///
     /// # Errors
     /// Returns an error if the model cannot be retrieved, or if a connection to the database cannot be established.
-    async fn fresh(&self) -> Result<Self, query::Error> {
-        query::find(self.primary_key()).await
-    }
+    async fn fresh(&self) -> Result<Self, query::Error>;
 
     /// Begin querying the model.
     #[must_use]
@@ -99,13 +110,40 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug {
         Builder::new(Self::TABLE_NAME.to_string())
     }
 
-    #[cfg(feature = "json")]
+    /// Begin querying a model with eager loading.
+    fn with<T: Into<EagerLoad>>(eager_load: T) -> Builder {
+        Self::query().with(eager_load)
+    }
+
+    async fn load<T: Into<EagerLoad> + Send>(&mut self, relation: T) -> Result<(), query::Error> {
+        for relation in relation.into().list() {
+            let rows = self.eager_load(&relation, &[&self]).get_rows().await?;
+
+            self.fill_relation(&relation, &rows)?;
+        }
+
+        Ok(())
+    }
+
+    /// Eager load a relationship for a set of models.
+    /// This method is used internally by Ensemble, and should not be called directly.
+    #[doc(hidden)]
+    fn eager_load(&self, relation: &str, related: &[&Self]) -> Builder;
+
+    /// Fill a relationship for a set of models.
+    /// This method is used internally by Ensemble, and should not be called directly.
+    #[doc(hidden)]
+    fn fill_relation(
+        &mut self,
+        relation: &str,
+        related: &[HashMap<String, Value>],
+    ) -> Result<(), query::Error>;
+
     /// Convert the model to a JSON value.
     ///
     /// # Errors
     ///
     /// Returns an error if the model cannot be converted to JSON.
-    fn json(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap()
-    }
+    #[cfg(feature = "json")]
+    fn json(&self) -> serde_json::Value;
 }

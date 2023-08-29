@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc};
 use deluxe::ExtractAttributes;
 use inflector::Inflector;
 use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote, quote_spanned, ToTokens};
+use quote::{quote, quote_spanned, ToTokens};
 use syn::{spanned::Spanned, FieldsNamed, GenericArgument, PathArguments, Type};
 
 use crate::Relationship;
@@ -83,7 +83,7 @@ impl Field {
 
         Ok(if let Some(default) = &attrs.value {
             Some(quote_spanned! { self.span() => #default })
-        } else if let Some(uuid) = attrs.uuid.version() {
+        } else if attrs.uuid {
             let Type::Path(ty) = &self.ty else {
                 return Err(syn::Error::new_spanned(
                     self,
@@ -98,8 +98,7 @@ impl Field {
                 ));
             }
 
-            let new_fn = format_ident!("new_{uuid}");
-            Some(quote_spanned! { self.span() => <#ty>::#new_fn() })
+            Some(quote_spanned! { self.span() => <#ty>::new_v4() })
         } else if attrs.incrementing.unwrap_or(is_primary && is_u64) {
             Some(quote_spanned! { self.span() => 0 })
         } else if attrs.created_at || attrs.updated_at {
@@ -114,6 +113,13 @@ impl Field {
         } else if let Some((relationship_type, related, _)) = self.relationship(primary_key) {
             let relationship_ident = Ident::new(&relationship_type.to_string(), self.span());
             let foreign_key = self.foreign_key(relationship_type);
+
+            if self.attr.column == Some(self.ident.to_string()) {
+                return Err(syn::Error::new_spanned(
+                    self,
+                    "You cannot name a relationship field the same as the column it references.",
+                ));
+            }
 
             Some(
                 quote_spanned! { self.span() => <#relationship_ident<#name, #related>>::build(Default::default(), None, #foreign_key) },
@@ -244,8 +250,8 @@ impl Fields {
             .collect()
     }
 
-    pub fn mark_relationship_keys(&mut self) {
-        let primary_key = self.primary_key().unwrap();
+    pub fn mark_relationship_keys(&mut self) -> syn::Result<()> {
+        let primary_key = self.primary_key()?;
         let relationship_keys = self
             .relationships()
             .iter()
@@ -259,6 +265,8 @@ impl Fields {
             .for_each(|f| {
                 f.attr.used_in_relationship = true;
             });
+
+        Ok(())
     }
 }
 
@@ -268,14 +276,16 @@ impl ToTokens for Fields {
     }
 }
 
-impl From<FieldsNamed> for Fields {
-    fn from(ast: FieldsNamed) -> Self {
+impl TryFrom<FieldsNamed> for Fields {
+    type Error = syn::Error;
+    fn try_from(ast: FieldsNamed) -> Result<Self, Self::Error> {
         let fields = ast.named.iter().map(|f| Field::new(f.clone())).collect();
 
         let mut fields = Self { ast, fields };
 
-        fields.mark_relationship_keys();
-        fields
+        fields.mark_relationship_keys()?;
+
+        Ok(fields)
     }
 }
 

@@ -117,9 +117,11 @@ impl Table {
     }
 
     pub fn uuid(&mut self) -> Column {
-        Column::new("id".to_string(), Type::Uuid, self.sender.clone())
-            .uuid(true)
-            .primary(true)
+        let column = Column::new("id".to_string(), Type::Uuid, self.sender.clone());
+        #[cfg(feature = "uuid")]
+        let column = column.uuid(true);
+
+        column.primary(true)
     }
 
     pub fn string(&mut self, name: &str) -> Column {

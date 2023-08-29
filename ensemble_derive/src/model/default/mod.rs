@@ -8,15 +8,13 @@ use super::field::Fields;
 #[derive(Debug, ParseMetaItem, Default)]
 #[deluxe(default)]
 pub struct Options {
-    pub incrementing: Option<bool>,
+    pub uuid: bool,
     pub created_at: bool,
     pub updated_at: bool,
+    pub incrementing: Option<bool>,
     #[deluxe(rename = default)]
     pub value: Option<Expr>,
-    pub uuid: uuid::Version,
 }
-
-pub mod uuid;
 
 pub fn r#impl(name: &Ident, fields: &Fields) -> syn::Result<TokenStream> {
     let mut defaults = vec![];
