@@ -111,6 +111,13 @@ impl Column {
         }
 
         if let Some(default) = &self.default {
+            if let Type::Enum(values) = &self.r#type {
+                assert!(
+                    values.contains(&default.to_string()),
+                    "default value must be one of the enum values"
+                );
+            }
+
             sql.push_str(&format!(" DEFAULT {default}"));
         }
 
@@ -128,7 +135,11 @@ impl Column {
         }
 
         if self.auto_increment {
+            #[cfg(feature = "mysql")]
             sql.push_str(" AUTO_INCREMENT");
+
+            #[cfg(feature = "postgres")]
+            sql.push_str(" SERIAL");
         }
 
         if let Some(index) = &self.index {
@@ -144,7 +155,11 @@ impl Column {
         }
 
         if self.use_current {
+            #[cfg(feature = "mysql")]
             sql.push_str(" DEFAULT CURRENT_TIMESTAMP");
+
+            #[cfg(feature = "postgres")]
+            sql.push_str(" DEFAULT now()");
         }
 
         if self.use_current_on_update {
