@@ -61,13 +61,13 @@ impl<T: Sha256Digest> PartialEq for Hashed<T> {
 
 impl<T: Sha256Digest> PartialEq<String> for Hashed<T> {
     fn eq(&self, other: &String) -> bool {
-        self.value == *other
+        self.value == digest(other)
     }
 }
 
 impl<T: Sha256Digest> PartialEq<&str> for Hashed<T> {
     fn eq(&self, other: &&str) -> bool {
-        self.value == *other
+        self.value == digest(*other)
     }
 }
 
