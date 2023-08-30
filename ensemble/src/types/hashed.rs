@@ -17,7 +17,7 @@ impl<T: Sha256Digest> Hashed<T> {
     /// ```
     /// # use ensemble::types::Hashed;
     /// let hashed = Hashed::new("hello world");
-    /// # assert_eq!(hashed, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9")
+    /// # assert_eq!(hashed, "hello world")
     /// ```
     pub fn new(value: T) -> Self {
         Self {
@@ -90,5 +90,16 @@ impl<'de, T: Sha256Digest> Deserialize<'de> for Hashed<T> {
 impl<T: Sha256Digest> validator::HasLen for &Hashed<T> {
     fn length(&self) -> u64 {
         self.value.len() as u64
+    }
+}
+
+#[cfg(feature = "schema")]
+impl<T: Sha256Digest> schemars::JsonSchema for Hashed<T> {
+    fn schema_name() -> String {
+        String::from("String")
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        gen.subschema_for::<String>()
     }
 }

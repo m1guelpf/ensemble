@@ -15,7 +15,7 @@ pub fn r#impl(name: &Ident, fields: &Fields) -> TokenStream {
 
 pub fn impl_serialize(name: &Ident, fields: &Fields) -> TokenStream {
     let count = fields.fields.len();
-    let fields = fields.fields.iter().map(|field| {
+    let serialize_field = fields.fields.iter().map(|field| {
         let ident = &field.ident;
         let column = field
             .attr
@@ -28,6 +28,43 @@ pub fn impl_serialize(name: &Ident, fields: &Fields) -> TokenStream {
         }
     });
 
+    #[cfg(feature = "json")]
+    let serialize_fields = if fields.fields.iter().any(|f| f.attr.hide && !f.attr.show) {
+        let fields_with_hidden = fields.fields.iter().filter_map(|field| {
+            if field.attr.hide && !field.attr.show {
+                return None;
+            }
+
+            let ident = &field.ident;
+            let column = field
+                .attr
+                .column
+                .as_ref()
+                .map_or(field.ident.clone(), |v| Ident::new(v, field.span()));
+
+            Some(quote_spanned! {field.span()=>
+                state.serialize_field(stringify!(#column), &self.#ident)?;
+            })
+        });
+
+        quote! {
+            // ugly hack to figure out if we're serializing for rbs. might break in future (or previous) versions of rust.
+            if ::std::any::type_name::<S::Error>() == ::std::any::type_name::<::ensemble::rbs::Error>() {
+                #(#serialize_field)*
+            } else {
+                #(#fields_with_hidden)*
+            }
+        }
+    } else {
+        quote! {
+            #(#serialize_field)*
+        }
+    };
+    #[cfg(not(feature = "json"))]
+    let serialize_fields: TokenStream = quote! {
+        #(#serialize_field)*
+    };
+
     quote! {
         const _: () = {
             use ::ensemble::serde::ser::SerializeStruct;
@@ -35,7 +72,7 @@ pub fn impl_serialize(name: &Ident, fields: &Fields) -> TokenStream {
             impl ::ensemble::serde::Serialize for #name {
                 fn serialize<S: ::ensemble::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
                     let mut state = serializer.serialize_struct(stringify!(#name), #count)?;
-                    #(#fields)*
+                    #serialize_fields
                     state.end()
                 }
             }

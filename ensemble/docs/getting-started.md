@@ -255,7 +255,7 @@ async fn store_flight(Json(request): Json<FlightRequest>) -> impl IntoResponse {
 
     flight.save().await.unwrap();
 
-    (StatusCode::CREATED, Json(flight.json()))
+    (StatusCode::CREATED, Json(flight))
 }
 ```
 
@@ -418,3 +418,5 @@ struct User {
     pub password: Hashed<String>,
 }
 ```
+
+Note that fields marked as hidden will not be present on any [`serde`] serialized formats, not just JSON.

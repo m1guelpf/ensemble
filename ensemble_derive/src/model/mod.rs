@@ -38,11 +38,6 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     let fields = Fields::try_from(struct_fields.clone())?;
     let primary_key = fields.primary_key()?;
 
-    #[cfg(feature = "json")]
-    let impl_json = impl_json(&fields);
-    #[cfg(not(feature = "json"))]
-    let impl_json = TokenStream::new();
-
     let keys_impl = impl_keys(&fields);
     let find_impl = impl_find(primary_key);
     let fresh_impl = impl_fresh(primary_key);
@@ -67,7 +62,6 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
                 type PrimaryKey = #primary_key_type;
                 const NAME: &'static str = stringify!(#name);
 
-                #impl_json
                 #save_impl
                 #keys_impl
                 #find_impl
@@ -99,7 +93,7 @@ fn impl_fill_relation(fields: &Fields) -> TokenStream {
     });
 
     quote! {
-        fn fill_relation(&mut self, relation: &str, related: &[::std::collections::HashMap<::std::string::String, ::ensemble::Value>]) -> Result<(), ::ensemble::query::Error> {
+        fn fill_relation(&mut self, relation: &str, related: &[::std::collections::HashMap<::std::string::String, ::ensemble::rbs::Value>]) -> Result<(), ::ensemble::query::Error> {
             match relation {
                 #(#fill_relation)*
                 _ => panic!("Model does not have a {relation} relation"),
@@ -172,31 +166,6 @@ fn impl_relationships(name: &Ident, fields: &Fields) -> syn::Result<TokenStream>
     })
 }
 
-#[cfg(feature = "json")]
-fn impl_json(fields: &Fields) -> TokenStream {
-    let remove_fields = fields
-        .fields
-        .iter()
-        .filter(|field| field.attr.hide && !field.attr.show)
-        .map(|f| {
-            let ident = &f.ident;
-            quote_spanned! {f.span() => value.remove(stringify!(#ident)); }
-        });
-
-    quote! {
-        fn json(&self) -> ::ensemble::serde_json::Value {
-            let value = ::ensemble::serde_json::to_value(self).unwrap();
-            let ::ensemble::serde_json::Value::Object(mut value) = value else {
-                return value;
-            };
-
-            #(#remove_fields)*
-
-            ::ensemble::serde_json::Value::Object(value)
-        }
-    }
-}
-
 fn impl_save(should_validate: bool, primary_key: &Field) -> TokenStream {
     let ident = &primary_key.ident;
     let run_validation = if should_validate {
@@ -213,7 +182,7 @@ fn impl_save(should_validate: bool, primary_key: &Field) -> TokenStream {
 
             let rows_affected = Self::query()
                 .r#where(Self::PRIMARY_KEY, "=", self.#ident)
-                .update(::ensemble::to_value!(self))
+                .update(::ensemble::rbs::to_value!(self))
                 .await?;
 
             if rows_affected != 1 {
@@ -231,7 +200,7 @@ fn impl_find(primary_key: &Field) -> TokenStream {
     quote! {
         async fn find(#ident: Self::PrimaryKey) -> Result<Self, ::ensemble::query::Error> {
             Self::query()
-                .r#where(Self::PRIMARY_KEY, "=", ::ensemble::to_value!(#ident))
+                .r#where(Self::PRIMARY_KEY, "=", ::ensemble::rbs::to_value!(#ident))
                 .first()
                 .await?
                 .ok_or(::ensemble::query::Error::NotFound)
