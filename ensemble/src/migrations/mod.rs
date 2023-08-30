@@ -61,5 +61,7 @@ pub trait Migration: Sync + Send {
     /// # Errors
     ///
     /// Returns an error if the migration fails, or if a connection to the database cannot be established.
-    async fn down(&self) -> Result<(), Error>;
+    async fn down(&self) -> Result<(), Error> {
+        Ok(())
+    }
 }
