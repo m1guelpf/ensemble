@@ -11,7 +11,9 @@ Database tables are often related to one another. For example, a blog post may h
 Ensemble relationships are defined as fields on your Ensemble model. Ensemble will automatically generate a homonymous method to resolve the relationship, but you can directly access the relationship object to chain additional query constrainsts at runtime:
 
 ```rust
-# use ensemble::{Model, relationships::{Relationship, HasMany}, types::DateTime};
+use ensemble::relationships::Relationship;
+
+# use ensemble::{Model, relationships::{HasMany}, types::DateTime};
 # #[derive(Debug, Model)]
 # struct User {
 #    id: u64,
@@ -39,7 +41,8 @@ But, before diving too deep into using relationships, let's learn how to define 
 A one-to-one relationship is a very basic type of database relationship. For example, a `User` model might be associated with one `Phone` model. To define this relationship, we will place a `phone` field on the User model. The `phone` field should be of type [`HasOne<User, Phone>`], which is available under the `ensemble::relationships` module:
 
 ```rust
-use ensemble::{Model, relationships::HasOne};
+# use ensemble::Model;
+use ensemble::relationships::HasOne;
 # #[derive(Debug, Model)]
 # struct Phone {
 #    id: u64
@@ -78,12 +81,11 @@ let phone = user.phone().await?;
 Ensemble determines the foreign key of the relationship based on the parent model name. In this case, the `Phone` model is automatically assumed to have a `user_id` foreign key. If you wish to override this convention, you can use the `#[model(foreign_key)]` attribute:
 
 ```rust
-use ensemble::{Model, relationships::HasOne};
+# use ensemble::{Model, relationships::HasOne};
 # #[derive(Debug, Model)]
 # struct Phone {
 #    id: u64
 # }
-
 #[derive(Debug, Model)]
 struct User {
     id: u64,
@@ -97,12 +99,11 @@ struct User {
 Additionally, Ensemble assumes that the foreign key should have a value matching the primary key column of the parent. In other words, Ensemble will look for the value of the user's primary column in the `user_id` column of the `Phone` record. If you would like the relationship to use a separate value from your model's primary key, you may use the `#[model(column)]` attribute:
 
 ```rust
-use ensemble::{Model, relationships::HasOne};
+# use ensemble::{Model, relationships::HasOne};
 # #[derive(Debug, Model)]
 # struct Phone {
 #    id: u64
 # }
-
 #[derive(Debug, Model)]
 struct User {
     id: u64,
@@ -118,7 +119,8 @@ struct User {
 So, we can access the `Phone` model from our `User` model. Next, let's define a relationship on the `Phone` model that will let us access the user that owns the phone. We can define the inverse of a [`HasOne`] relationship using the [`BelongsTo`] type:
 
 ```rust
-use ensemble::{Model, relationships::BelongsTo};
+use ensemble::relationships::BelongsTo;
+# use ensemble::Model;
 # #[derive(Debug, Model)]
 # struct User {
 #    id: u64
@@ -138,12 +140,11 @@ When invoking the `user` method, Ensemble will attempt to find a `User` model th
 Ensemble determines the foreign key name by examining the name of the relationship method and suffixing the method name with `_id`. So, in this case, Ensemble assumes that the `Phone` model has a `user_id` column. However, if the foreign key on the `Phone` model is not `user_id`, you may provide a custom key name using the `#[model(foreign_key)]` attribute:
 
 ```rust
-use ensemble::{Model, relationships::BelongsTo};
+# use ensemble::{Model, relationships::BelongsTo};
 # #[derive(Debug, Model)]
 # struct User {
 #    id: u64
 # }
-
 #[derive(Debug, Model)]
 struct Phone {
     id: u64,
@@ -157,13 +158,12 @@ struct Phone {
 If you wish to find the associated model using a different column than the model's primary key, you may specify the parent table's custom key using the `#[model(column)]` attribute:
 
 ```rust
-use ensemble::{Model, relationships::BelongsTo};
+# use ensemble::{Model, relationships::BelongsTo};
 # #[derive(Debug, Model)]
 # struct User {
 #    #[model(primary)]
 #    uuid: u64
 # }
-
 #[derive(Debug, Model)]
 struct Phone {
     id: u64,
@@ -179,13 +179,14 @@ struct Phone {
 A one-to-many relationship is used to define relationships where a single model is the parent to one or more child models. For example, a blog post may have an infinite number of comments. Like all other Ensemble relationships, one-to-many relationships are defined by defining a field on your Ensemble model:
 
 ```rust
-use ensemble::{Model, relationships::HasMany};
+use ensemble::relationships::HasMany;
+# use ensemble::Model;
 # #[derive(Debug, Model)]
 # struct Comment {
 #    id: u64
 # }
-
 #[derive(Debug, Model)]
+
 struct Post {
     id: u64,
     title: String,
@@ -208,13 +209,14 @@ Once the relationship method has been defined, we can access the list of related
 # }
 # #[derive(Debug, Model)]
 # struct Comment {
-#    id: u64
+#    id: u64,
+#    text: String
 # }
 # async fn example() -> Result<(), ensemble::query::Error> {
 let mut post = Post::find(1).await?;
 
 for comment in post.comments().await? {
-    // ...
+    println!("{}", comment.text);
 }
 # Ok(())
 # }
@@ -246,12 +248,11 @@ let comment: Option<Comment> = post.comments.query()
 Like the [`HasOne`] relationship, you may also override the foreign and local keys with the `#[model(foreign_key)]` and `#[model(column)]` attributes:
 
 ```rust
-use ensemble::{Model, relationships::HasMany};
+# use ensemble::{Model, relationships::HasMany};
 # #[derive(Debug, Model)]
 # struct Comment {
 #    id: u64
 # }
-
 #[derive(Debug, Model)]
 struct Post {
     id: u64,
@@ -268,7 +269,8 @@ struct Post {
 Now that we can access all of a post's comments, let's define a relationship to allow a comment to access its parent post. To define the inverse of a [`HasMany`] relationship, define a field on the child model with the [`BelongsTo`] type:
 
 ```rust
-use ensemble::{Model, relationships::BelongsTo};
+use ensemble::relationships::BelongsTo;
+# use ensemble::Model;
 # #[derive(Debug, Model)]
 # struct Post {
 #    id: u64
@@ -312,12 +314,11 @@ Ensemble determines the default foreign key name by examining the name of the pa
 However, if the foreign key for your relationship does not follow these conventions, you may provide a custom foreign key name using the `#[model(foreign_key)]` attribute:
 
 ```rust
-use ensemble::{Model, relationships::BelongsTo};
+# use ensemble::{Model, relationships::BelongsTo};
 # #[derive(Debug, Model)]
 # struct Post {
 #    id: u64
 # }
-
 #[derive(Debug, Model)]
 struct Comment {
     id: u64,
@@ -331,7 +332,7 @@ struct Comment {
 If you wish to find the associated model using a different column than the model's primary key, you may specify the parent table's custom key using the `#[model(column)]` attribute:
 
 ```rust
-use ensemble::{Model, relationships::BelongsTo};
+# use ensemble::{Model, relationships::BelongsTo};
 # #[derive(Debug, Model)]
 # struct Post {
 #    id: u64,
@@ -375,7 +376,8 @@ role_user
 Many-to-many relationships are defined by creating a field of type [`BelongsToMany`]. For example, let's define a `roles` field on our `User` model. Like all relationships in Ensemble, the [`BelongsToMany`] type expects two generics: the type of the current model, and the type of the related model.
 
 ```rust
-use ensemble::{Model, relationships::BelongsToMany};
+use ensemble::relationships::BelongsToMany;
+# use ensemble::Model;
 # #[derive(Debug, Model)]
 # struct Role {
 #    id: u64
@@ -401,13 +403,14 @@ Once the relationship is defined, you may access the user's roles using the `rol
 # }
 # #[derive(Debug, Model)]
 # struct Role {
-#    id: u64
+#    id: u64,
+#    name: String
 # }
 # async fn example() -> Result<(), ensemble::query::Error> {
 let mut user = User::find(1).await?;
 
 for role in user.roles().await? {
-    // ...
+    println!("{}", role.name);
 }
 # Ok(())
 # }
@@ -439,12 +442,11 @@ let roles: Vec<Role> = user.roles.query()
 To determine the table name of the relationship's intermediate table, Ensemble will join the two related model names in alphabetical order. However, you are free to override this convention. You may do so using the `#[model(pivot_table)]` attribute:
 
 ```rust
-use ensemble::{Model, relationships::BelongsToMany};
+# use ensemble::{Model, relationships::BelongsToMany};
 # #[derive(Debug, Model)]
 # struct Role {
 #    id: u64
 # }
-
 #[derive(Debug, Model)]
 struct User {
     pub id: u64,
@@ -458,12 +460,11 @@ struct User {
 In addition to customizing the name of the intermediate table, you may also customize the column names of the keys on the table using the `#[model(local_key)]` attribute for the foreign key name of the model on which you are defining the relationship, and the `#[model(foreign_key)]` attribute for the foreign key name of the model that you are joining to:
 
 ```rust
-use ensemble::{Model, relationships::BelongsToMany};
+# use ensemble::{Model, relationships::BelongsToMany};
 # #[derive(Debug, Model)]
 # struct Role {
 #    id: u64
 # }
-
 #[derive(Debug, Model)]
 struct User {
     pub id: u64,
@@ -479,12 +480,11 @@ struct User {
 To define the "inverse" of a many-to-many relationship, you should define a field on the related model of type [`BelongsToMany`] as well. To complete our user / role example, let's define the `users` field on the `Role` model:
 
 ```rust
-use ensemble::{Model, relationships::BelongsToMany};
+# use ensemble::{Model, relationships::BelongsToMany};
 # #[derive(Debug, Model)]
 # struct User {
 #    id: u64
 # }
-
 #[derive(Debug, Model)]
 struct Role {
     pub id: u64,
@@ -503,12 +503,11 @@ Since all Ensemble relationships are defined via fields, you may access those fi
 For example, imagine a blog application in which a `User` model has many associated `Post` models:
 
 ```rust
-use ensemble::{Model, relationships::HasMany};
+# use ensemble::{Model, relationships::HasMany};
 # #[derive(Debug, Model)]
 # struct Post {
 #    id: u64
 # }
-
 #[derive(Debug, Model)]
 struct User {
     pub id: u64,
@@ -531,7 +530,6 @@ You may query the `posts` relationship and add additional constraints to the rel
 # struct Post {
 #    id: u64
 # }
-
 # async fn example() -> Result<(), ensemble::query::Error> {
 let user = User::find(1).await?;
 
@@ -593,8 +591,7 @@ In most situations, you should use logical groups to group the conditional check
 let posts: Vec<Post> = user.posts.query()
     .r#where("active", '=', 1)
     .where_group(|query| {
-        query.r#where("active", '=', 1)
-            .or_where("votes", ">=", 100)
+        query.r#where("active", '=', 1).or_where("votes", ">=", 100)
     })
     .get().await?;
 # Ok(())
@@ -623,12 +620,13 @@ If you do not need to add additional constraints to an Ensemble relationship que
 # #[derive(Debug, Model)]
 # struct Post {
 #    id: u64,
+#    title: String
 # }
 # async fn example() -> Result<(), ensemble::query::Error> {
 let mut user = User::find(1).await?;
 
 for post in user.posts().await? {
-    // ...
+    println!("{}", post.title);
 }
 # Ok(())
 # }
@@ -664,12 +662,11 @@ let posts_count = user.posts.query().count().await?;
 When accessing Ensemble relationships as properties, the related models are "lazy loaded". This means the relationship data is not actually loaded until you first call the function. However, Ensemble can "eager load" relationships at the time you query the parent model. Eager loading alleviates the "N + 1" query problem. To illustrate the N + 1 query problem, consider a `Book` model that "belongs to" to an `Author` model:
 
 ```rust
-use ensemble::{Model, relationships::BelongsTo};
+# use ensemble::{Model, relationships::BelongsTo};
 # #[derive(Debug, Model)]
 # struct Author {
 #    id: u64
 # }
-
 #[derive(Debug, Model)]
 struct Book {
     pub id: u64,

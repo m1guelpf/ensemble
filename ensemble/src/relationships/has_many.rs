@@ -31,7 +31,7 @@ use crate::{builder::Builder, query::Error, Model};
 /// # async fn call() -> Result<(), ensemble::query::Error> {
 /// let mut post = Post::find(1).await?;
 ///
-/// post.comments().await?;
+/// let comments: &Vec<Comment> = post.comments().await?;
 /// # Ok(())
 /// # }
 /// ```

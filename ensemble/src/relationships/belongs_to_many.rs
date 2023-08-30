@@ -28,7 +28,7 @@ use crate::{builder::Builder, query::Error, Model};
 /// # async fn call() -> Result<(), ensemble::query::Error> {
 /// let mut user = User::find(1).await?;
 ///
-/// user.roles().await?;
+/// let roles: &Vec<Role> = user.roles().await?;
 /// # Ok(())
 /// # }
 /// ```

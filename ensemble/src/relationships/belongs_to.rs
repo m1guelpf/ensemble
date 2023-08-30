@@ -29,7 +29,7 @@ use crate::{builder::Builder, query::Error, Model};
 /// # async fn call() -> Result<(), ensemble::query::Error> {
 /// let mut site = Site::find(1).await?;
 ///
-/// site.user().await?;
+/// let user: &User = site.user().await?;
 /// # Ok(())
 /// # }
 /// ```

@@ -23,8 +23,7 @@ After glancing at the example above, you may have noticed that we did not tell E
 If your model's corresponding database table does not fit this convention, you may manually specify the model's table name using the `#[ensemble(table)]` attribute:
 
 ```rust
-use ensemble::Model;
-
+# use ensemble::Model;
 #[derive(Debug, Model)]
 #[ensemble(table = "my_flights")]
 struct Flight {
@@ -54,8 +53,7 @@ struct Flight {
 Ensemble requires every model to have a primary key. If your model includes an `id` field, Ensemble will assume that this is your primary key. If necessary, you may mark any other field as the primary field using the `#[model(primary)]` attribute:
 
 ```rust
-use ensemble::Model;
-
+# use ensemble::Model;
 #[derive(Debug, Model)]
 struct Flight {
     #[model(primary)]
@@ -67,8 +65,7 @@ struct Flight {
 In addition, if the primary key is of type `u64`, Ensemble will use the database's incrementing feature and automatically give it a value on new instances of the model. If you wish to use a non-incrementing primary key, you must use a different type or opt-out with the `#[model(incrementing = false)]` attribute:
 
 ```rust
-use ensemble::Model;
-
+# use ensemble::Model;
 #[derive(Debug, Model)]
 struct Flight {
     #[model(incrementing = false)]
@@ -88,13 +85,11 @@ Instead of using auto-incrementing integers as your Ensemble model's primary key
 If you would like a model to use a UUID key instead of an auto-incrementing integer key, you may use the `uuid::Uuid` type on the model's primary key, and mark it with the `#[model(uuid)]` attribute:
 
 ```rust
-use uuid::Uuid;
-use ensemble::Model;
-
+# use ensemble::Model;
 #[derive(Debug, Model)]
 struct Flight {
     #[model(uuid)]
-    pub id: Uuid,
+    pub id: uuid::Uuid,
     pub name: String,
 }
 ```
@@ -104,7 +99,8 @@ struct Flight {
 If your model includes `created_at` and `updated_at` fields, Ensemble will automatically set these column's values when models are created or updated, like so:
 
 ```rust
-use ensemble::{types::DateTime, Model};
+# use ensemble::Model;
+use ensemble::types::DateTime;
 
 #[derive(Debug, Model)]
 struct Flight {
@@ -118,13 +114,11 @@ struct Flight {
 If you need to customize the names of the fields used to store the timestamps, you may use the `#[model(created_at)]` and `#[model(updated_at)]` attributes:
 
 ```rust
-use ensemble::{types::DateTime, Model};
-
+# use ensemble::{types::DateTime, Model};
 #[derive(Debug, Model)]
 struct Flight {
     pub id: u64,
     pub name: String,
-
     #[model(created_at)]
     pub creation_date: DateTime,
     #[model(updated_at)]
@@ -137,8 +131,7 @@ struct Flight {
 Ensemble models automatically implement the [`Default`] trait, which means you can use the `default` method to create a new instance of the model with all its fields set to their default values. You can customize the default value of a field by using the `#[model(default)]` attribute:
 
 ```rust
-use ensemble::{types::DateTime, Model};
-
+# use ensemble::{types::DateTime, Model};
 #[derive(Debug, Model)]
 struct Flight {
     pub id: u64,
@@ -178,12 +171,13 @@ The Ensemble `all` method will return all of the results in the model's table. H
 #    id: u64,
 #    name: String
 # }
-# async fn example() -> Vec<Flight> {
-Flight::query()
+# async fn example() -> Result<(), ensemble::query::Error> {
+let flights: Vec<Flight> = Flight::query()
     .r#where("active", '=', 1)
     .order_by("name", "asc")
     .limit(10)
-    .get().await.unwrap()
+    .get().await?;
+# Ok(())
 # }
 ```
 
@@ -199,7 +193,10 @@ If you already have an instance of an Ensemble model that was retrieved from the
 #    name: String
 # }
 # async fn example() -> Result<(), ensemble::query::Error> {
-let flight: Flight = Flight::query().r#where("number", '=', "FR 900").first().await?.unwrap();
+let flight: Flight = Flight::query()
+    .r#where("number", '=', "FR 900")
+    .first().await?
+    .unwrap();
 
 let fresh_flight = flight.fresh().await?;
 # Ok(())
@@ -222,7 +219,10 @@ In addition to retrieving all of the records matching a given query, you may als
 let flight = Flight::find(1).await?;
 
 // Retrieve the first model matching the query constraints...
-let flight: Flight = Flight::query().r#where("active", "=", 1).first().await?.unwrap();
+let flight: Flight = Flight::query()
+    .r#where("active", "=", 1)
+    .first().await?
+    .unwrap();
 # Ok(())
 # }
 ```
@@ -235,7 +235,7 @@ Of course, when using Ensemble, we don't only need to retrieve models from the d
 
 ```rust
 # use ensemble::Model;
-use axum::{Json, response::IntoResponse, http::StatusCode};
+use axum::{Json, http::StatusCode, response::IntoResponse};
 # #[derive(Debug, Model)]
 # struct Flight {
 #    id: u64,
@@ -252,9 +252,10 @@ async fn store_flight(Json(request): Json<FlightRequest>) -> impl IntoResponse {
         name: request.name,
         ..Flight::default()
     };
+
     flight.save().await.unwrap();
 
-    (StatusCode::CREATED, "Flight saved successfully".to_string())
+    (StatusCode::CREATED, Json(flight.json()))
 }
 ```
 
@@ -381,10 +382,10 @@ To convert a model to JSON, you should use the `json` method. This will return a
 # struct User {
 #  pub id: u64
 # }
-# async fn test() -> serde_json::Value {
-let user = User::find(1).await.unwrap();
+# async fn test() -> Result<serde_json::Value, ensemble::query::Error> {
+let user = User::find(1).await?;
 
-return user.json();
+return Ok(user.json());
 # }
 ```
 
