@@ -503,7 +503,6 @@ dependencies = [
  "rbatis",
  "rbdc-mysql",
  "rbdc-pg",
- "rbdc-sqlite",
  "rbs",
  "serde",
  "serde_json",
@@ -675,17 +674,6 @@ dependencies = [
  "futures-core",
  "futures-task",
  "futures-util",
-]
-
-[[package]]
-name = "futures-intrusive"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d930c203dd0b6ff06e0201a4a2fe9149b43c684fd4420555b26d21b1a02956f"
-dependencies = [
- "futures-core",
- "lock_api",
- "parking_lot",
 ]
 
 [[package]]
@@ -909,7 +897,6 @@ checksum = "d5477fe2230a79769d8dc68e0eabf5437907c0457a5614a9e8dddb67f65eb65d"
 dependencies = [
  "equivalent",
  "hashbrown",
- "serde",
 ]
 
 [[package]]
@@ -956,17 +943,6 @@ name = "libm"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7012b1bbb0719e1097c47611d3898568c546d597c2e74d66f6087edd5233ff4"
-
-[[package]]
-name = "libsqlite3-sys"
-version = "0.26.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afc22eff61b133b115c6e8c74e818c628d6d5e7a502afea6f64dee076dd94326"
-dependencies = [
- "cc",
- "pkg-config",
- "vcpkg",
-]
 
 [[package]]
 name = "linux-raw-sys"
@@ -1576,34 +1552,6 @@ dependencies = [
  "url",
  "uuid",
  "whoami",
-]
-
-[[package]]
-name = "rbdc-sqlite"
-version = "4.3.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6875215476fb4efc9a3d56f3f299df24365b85dc0797414afb33a515d01ee37c"
-dependencies = [
- "atoi",
- "bytes",
- "either",
- "flume",
- "futures-channel",
- "futures-core",
- "futures-executor",
- "futures-intrusive",
- "futures-util",
- "indexmap",
- "libc",
- "libsqlite3-sys",
- "log",
- "parking_lot",
- "percent-encoding",
- "rbdc",
- "rbs",
- "serde",
- "smallvec",
- "url",
 ]
 
 [[package]]

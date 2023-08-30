@@ -117,19 +117,25 @@ impl Table {
     }
 
     pub fn uuid(&mut self) -> Column {
-        let column = Column::new("id".to_string(), Type::Uuid, self.sender.clone());
-        #[cfg(feature = "uuid")]
-        let column = column.uuid(true);
+        Column::new("id".to_string(), Type::Uuid, self.sender.clone())
+            .uuid(true)
+            .primary(true)
+    }
 
-        column.primary(true)
+    pub fn integer(&mut self, name: &str) -> Column {
+        Column::new(name.to_string(), Type::BigInteger, self.sender.clone())
+    }
+
+    pub fn json(&mut self, name: &str) -> Column {
+        Column::new(name.to_string(), Type::Json, self.sender.clone())
     }
 
     pub fn string(&mut self, name: &str) -> Column {
-        Column::new(name.to_string(), Type::String, self.sender.clone()).length(255)
+        Column::new(name.to_string(), Type::String(255), self.sender.clone())
     }
 
     pub fn boolean(&mut self, name: &str) -> Column {
-        Column::new(name.to_string(), Type::Boolean, self.sender.clone()).length(255)
+        Column::new(name.to_string(), Type::Boolean, self.sender.clone())
     }
 
     pub fn text(&mut self, name: &str) -> Column {
@@ -144,13 +150,21 @@ impl Table {
         ForeignIndex::new(column.to_string(), self.sender.clone())
     }
 
+    pub fn r#enum(&mut self, name: &str, values: &[&str]) -> Column {
+        Column::new(
+            name.to_string(),
+            Type::Enum(values.iter().map(ToString::to_string).collect()),
+            self.sender.clone(),
+        )
+    }
+
     pub fn foreign_id_for<M: Model>(&mut self) -> ForeignIndex {
         let column = format!("{}_{}", M::NAME, M::PRIMARY_KEY).to_snake_case();
 
         if ["u64", "u32", "u16", "u8", "usize"].contains(&type_name::<M::PrimaryKey>()) {
             Column::new(column.clone(), Type::BigInteger, self.sender.clone()).unsigned(true);
         } else {
-            Column::new(column.clone(), Type::String, self.sender.clone()).length(255);
+            Column::new(column.clone(), Type::String(255), self.sender.clone());
         }
 
         let index = ForeignIndex::new(column, self.sender.clone());

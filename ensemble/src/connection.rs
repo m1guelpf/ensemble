@@ -9,8 +9,6 @@ use rbatis::{
 use rbdc_mysql::driver::MysqlDriver;
 #[cfg(feature = "postgres")]
 use rbdc_pg::driver::PgDriver;
-#[cfg(feature = "sqlite")]
-use rbdc_sqlite::driver::SqliteDriver;
 use std::sync::OnceLock;
 
 pub type Connection = Object<ManagerPorxy>;
@@ -22,6 +20,7 @@ pub enum SetupError {
     #[error("The provided database URL is invalid.")]
     UrlError(#[from] rbatis::Error),
 
+    #[cfg(any(feature = "mysql", feature = "postgres"))]
     #[error("The database pool has already been initialized.")]
     AlreadyInitialized,
 }
@@ -31,12 +30,12 @@ pub enum SetupError {
 /// # Errors
 ///
 /// Returns an error if the database pool has already been initialized, or if the provided database URL is invalid.
+#[cfg(any(feature = "mysql", feature = "postgres"))]
 pub async fn setup(database_url: &str) -> Result<(), SetupError> {
     let rb = RBatis::new();
+
     #[cfg(feature = "mysql")]
     rb.link(MysqlDriver {}, database_url).await?;
-    #[cfg(feature = "sqlite")]
-    rb.link(SqliteDriver {}, database_url).await?;
     #[cfg(feature = "postgres")]
     rb.link(PgDriver {}, database_url).await?;
 

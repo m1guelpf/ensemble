@@ -43,6 +43,22 @@ impl Migrator {
         self.migrations.insert(name, migration);
     }
 
+    /// Returns a list of migrations that have been run.
+    #[must_use]
+    pub fn status(&self) -> Vec<StoredMigration> {
+        self.state.clone()
+    }
+
+    /// Returns a list of migrations that have not been run.
+    #[must_use]
+    pub fn pending(&self) -> HashMap<&str, &dyn Migration> {
+        self.migrations
+            .iter()
+            .filter(|(name, _)| !self.state.iter().any(|m| &&m.migration == name))
+            .map(|(name, migration)| (name.as_str(), migration.as_ref()))
+            .collect()
+    }
+
     /// Runs the migrations.
     ///
     /// # Errors
@@ -95,6 +111,59 @@ impl Migrator {
         Ok(())
     }
 
+    /// Rolls back all of the migrations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the migrations fail, or if a connection to the database cannot be established.
+    pub async fn rollback(mut self, batches: u64) -> Result<(), Error> {
+        let migrations = self
+            .state
+            .into_iter()
+            .filter(|m| m.batch >= self.batch.saturating_sub(batches))
+            .rev();
+
+        for record in migrations {
+            let migration = self
+                .migrations
+                .get(&record.migration)
+                .ok_or(Error::NotFound(record.migration))?;
+
+            self.connection
+                .exec("begin", vec![])
+                .await
+                .map_err(|e| Error::Database(e.to_string()))?;
+
+            MIGRATE_CONN
+                .try_lock()
+                .map_err(|_| Error::Lock)?
+                .replace(self.connection);
+
+            migration.down().await?;
+
+            self.connection = MIGRATE_CONN
+                .try_lock()
+                .map_err(|_| Error::Lock)?
+                .take()
+                .ok_or(Error::Lock)?;
+
+            self.connection
+                .exec(
+                    "delete from migrations where id = ?",
+                    vec![to_value!(record.id)],
+                )
+                .await
+                .map_err(|e| Error::Database(e.to_string()))?;
+
+            self.connection
+                .exec("commit", vec![])
+                .await
+                .map_err(|e| Error::Database(e.to_string()))?;
+        }
+
+        Ok(())
+    }
+
     async fn get_state(conn: &mut Connection) -> Result<Vec<StoredMigration>, Error> {
         conn.exec(
             "create table if not exists migrations (
@@ -117,8 +186,8 @@ impl Migrator {
     }
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-struct StoredMigration {
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct StoredMigration {
     id: u64,
     batch: u64,
     migration: String,

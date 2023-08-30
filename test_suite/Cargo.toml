@@ -6,10 +6,7 @@ name = "ensemble_test_suite"
 authors = ["Miguel Piedrafita <rust@miguel.build>"]
 
 [dependencies]
-ensemble = { path = "../ensemble", default-features = false, features = [
-    "native-tls",
-    "sqlite",
-] }
+ensemble = { path = "../ensemble" }
 serde = { version = "1.0.183", features = ["derive"] }
 uuid = { version = "1.4.1", features = ["v4", "serde"] }
 

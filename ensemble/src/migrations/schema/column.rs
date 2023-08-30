@@ -1,33 +1,45 @@
-use std::{fmt::Display, sync::mpsc};
-
 use ensemble_derive::Column;
+use std::{fmt::Display, rc::Rc, sync::mpsc};
 
 use super::Schemable;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Type {
+    Json,
     Uuid,
     Text,
-    String,
     Boolean,
     Timestamp,
     BigInteger,
+    String(u32),
+    Enum(Vec<String>),
 }
 
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Uuid => "uuid",
-                Self::Text => "text",
-                Self::String => "varchar",
-                Self::Boolean => "boolean",
-                Self::BigInteger => "bigint",
-                Self::Timestamp => "timestamp",
+        match self {
+            Self::Json => f.write_str("json"),
+            Self::Uuid => f.write_str("uuid"),
+            Self::Text => f.write_str("text"),
+            Self::Boolean => f.write_str("boolean"),
+            Self::BigInteger => f.write_str("bigint"),
+            Self::Timestamp => f.write_str("timestamp"),
+            Self::String(size) => {
+                let value = format!("varchar({size})");
+                f.write_str(&value)
             }
-        )
+            Self::Enum(values) => {
+                let value = format!(
+                    "enum({})",
+                    values
+                        .iter()
+                        .map(|v| format!("'{}'", v.replace('\'', "\\'")))
+                        .collect::<Rc<_>>()
+                        .join(", ")
+                );
+                f.write_str(&value)
+            }
+        }
     }
 }
 
@@ -43,15 +55,11 @@ pub struct Column {
     r#type: Type,
     /// Place the column "after" another column
     after: Option<String>,
-    /// The column's length (for string types)
-    #[builder(type = Type::String)]
-    length: Option<u32>,
     /// Set INTEGER columns as auto-increment (primary key)
     #[builder(rename = "increments", type = Type::BigInteger, needs = [primary, unique])]
     auto_increment: bool,
     /// Automatically generate UUIDs for the column
     #[builder(type = Type::Uuid)]
-    #[cfg(any(feature = "mysql", feature = "postgres"))]
     uuid: bool,
     /// Add a comment to the column
     comment: Option<String>,
@@ -61,9 +69,6 @@ pub struct Column {
     index: Option<String>,
     /// Allow NULL values to be inserted into the column
     nullable: bool,
-    /// Specify a collation for the column
-    #[builder(type = Type::String)]
-    collation: Option<String>,
     /// Add a primary index
     primary: bool,
     /// Add a unique index
@@ -87,10 +92,6 @@ impl Column {
     pub(crate) fn to_sql(&self) -> String {
         let mut sql = format!("{} {}", self.name, self.r#type);
 
-        if let Some(length) = self.length {
-            sql.push_str(&format!("({length})"));
-        }
-
         if self.unsigned {
             sql.push_str(" unsigned");
         }
@@ -113,7 +114,6 @@ impl Column {
             sql.push_str(&format!(" DEFAULT {default}"));
         }
 
-        #[cfg(any(feature = "mysql", feature = "postgres"))]
         if self.uuid {
             assert!(
                 self.default.is_none(),

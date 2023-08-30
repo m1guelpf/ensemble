@@ -17,6 +17,9 @@ pub enum Error {
     #[error("{0}")]
     Database(String),
 
+    #[error("Could not locate the {0} migration.")]
+    NotFound(String),
+
     #[error("Failed to receive column in schema.")]
     SendColumn,
 
