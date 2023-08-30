@@ -29,6 +29,8 @@ pub mod types;
 mod value;
 #[cfg(any(feature = "mysql", feature = "postgres"))]
 pub use connection::setup;
+#[cfg(any(feature = "mysql", feature = "postgres"))]
+pub use connection::get as get_connection;
 pub use ensemble_derive::Model;
 
 #[async_trait]
