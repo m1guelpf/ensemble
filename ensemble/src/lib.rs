@@ -6,7 +6,7 @@
 #[doc(hidden)]
 pub use async_trait::async_trait;
 #[doc(hidden)]
-pub use rbs::{to_value, Value};
+pub use rbs;
 #[doc(hidden)]
 pub use serde;
 #[doc(hidden)]
@@ -88,7 +88,7 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
     /// Returns an error if the model cannot be deleted, or if a connection to the database cannot be established.
     async fn delete(mut self) -> Result<(), query::Error> {
         let rows_affected = Self::query()
-            .r#where(Self::PRIMARY_KEY, "=", to_value!(self.primary_key()))
+            .r#where(Self::PRIMARY_KEY, "=", rbs::to_value!(self.primary_key()))
             .delete()
             .await?;
 
@@ -137,14 +137,16 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
     fn fill_relation(
         &mut self,
         relation: &str,
-        related: &[HashMap<String, Value>],
+        related: &[HashMap<String, rbs::Value>],
     ) -> Result<(), query::Error>;
 
     /// Convert the model to a JSON value.
     ///
-    /// # Errors
+    /// # Panics
     ///
-    /// Returns an error if the model cannot be converted to JSON.
+    /// Panics if the model cannot be converted to JSON. Since Ensemble manually implement Serialize, this should never happen.
     #[cfg(feature = "json")]
-    fn json(&self) -> serde_json::Value;
+    fn json(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap()
+    }
 }

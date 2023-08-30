@@ -17,6 +17,7 @@ itertools = "0.11.0"
 Inflector = "0.11.4"
 thiserror = "1.0.44"
 async-trait = "0.1.73"
+schemars = { version = "0.8.13", optional = true }
 validator = { version = "0.16.1", optional = true }
 serde_json = { version = "1.0.105", optional = true }
 ensemble_derive = { version = "0", path = "../ensemble_derive" }
@@ -32,8 +33,9 @@ uuid = { version = "1.4.1", features = ["serde"] }
 
 
 [features]
-default = ["native-tls", "json"]
+default = ["native-tls", "json", "schema"]
 
+schema = ["dep:schemars"]
 mysql = ["dep:rbdc-mysql"]
 postgres = ["dep:rbdc-pg"]
 json = ["dep:serde_json", "ensemble_derive/json"]
