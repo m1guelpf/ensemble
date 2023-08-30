@@ -142,9 +142,8 @@ impl Builder {
 
     /// Logically group a set of where clauses.
     #[must_use]
-    pub fn where_group(mut self, r#fn: impl FnOnce(&mut Self)) -> Self {
-        let mut builder = Self::new(self.table.clone());
-        r#fn(&mut builder);
+    pub fn where_group(mut self, r#fn: impl FnOnce(Self) -> Self) -> Self {
+        let builder = r#fn(Self::new(self.table.clone()));
 
         self.r#where
             .push(WhereClause::Group(builder.r#where, Boolean::And));
@@ -383,8 +382,8 @@ impl From<&str> for EagerLoad {
     }
 }
 
-impl From<&[&str]> for EagerLoad {
-    fn from(value: &[&str]) -> Self {
+impl From<Vec<&str>> for EagerLoad {
+    fn from(value: Vec<&str>) -> Self {
         Self::Multiple(value.iter().map(ToString::to_string).collect())
     }
 }

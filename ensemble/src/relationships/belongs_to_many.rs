@@ -94,8 +94,8 @@ impl<Local: Model, Related: Model> Relationship for BelongsToMany<Local, Related
             )
     }
 
-    fn query(&self) -> Result<Builder, Error> {
-        let query = Related::query()
+    fn query(&self) -> Builder {
+        Related::query()
             .from(Related::TABLE_NAME)
             .join(
                 &self.pivot_table,
@@ -107,15 +107,13 @@ impl<Local: Model, Related: Model> Relationship for BelongsToMany<Local, Related
                 &format!("{}.{}", self.pivot_table, self.local_key),
                 "=",
                 self.value.clone(),
-            );
-
-        Ok(query)
+            )
     }
 
     /// Get the related model.
     async fn get(&mut self) -> Result<&Self::Value, Error> {
         if self.relation.is_none() {
-            let relation = self.query()?.get().await?;
+            let relation = self.query().get().await?;
 
             self.relation = Some(relation);
         }

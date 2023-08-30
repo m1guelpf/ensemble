@@ -171,7 +171,7 @@ for flight in Flight::all().await? {
 
 The Ensemble `all` method will return all of the results in the model's table. However, since each Ensemble model serves as a query builder, you may add additional constraints to queries and then invoke the get method to retrieve the results:
 
-```rust no_run
+```rust
 # use ensemble::Model;
 # #[derive(Debug, Model)]
 # struct Flight {

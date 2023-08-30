@@ -36,7 +36,7 @@ pub trait Relationship {
     /// # Errors
     ///
     /// Returns an error if serialization fails when building the query.
-    fn query(&self) -> Result<Builder, Error>;
+    fn query(&self) -> Builder;
 
     /// Get the query builder for eager loading the relationship. Not intended to be used directly.
     ///

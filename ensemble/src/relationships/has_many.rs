@@ -75,22 +75,20 @@ impl<Local: Model, Related: Model> Relationship for HasMany<Local, Related> {
             .where_not_null(&format!("{}.{}", Related::TABLE_NAME, self.foreign_key))
     }
 
-    fn query(&self) -> Result<Builder, Error> {
-        let query = Related::query()
+    fn query(&self) -> Builder {
+        Related::query()
             .r#where(
                 &format!("{}.{}", Related::TABLE_NAME, self.foreign_key),
                 "=",
                 self.value.clone(),
             )
-            .where_not_null(&format!("{}.{}", Related::TABLE_NAME, self.foreign_key));
-
-        Ok(query)
+            .where_not_null(&format!("{}.{}", Related::TABLE_NAME, self.foreign_key))
     }
 
     /// Get the related models.
     async fn get(&mut self) -> Result<&Self::Value, Error> {
         if self.relation.is_none() {
-            let relation = self.query()?.get().await?;
+            let relation = self.query().get().await?;
 
             self.relation = Some(relation);
         }

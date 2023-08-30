@@ -74,23 +74,21 @@ impl<Local: Model, Related: Model> Relationship for HasOne<Local, Related> {
             .limit(1)
     }
 
-    fn query(&self) -> Result<Builder, Error> {
-        let query = Related::query()
+    fn query(&self) -> Builder {
+        Related::query()
             .r#where(
                 &format!("{}.{}", Related::TABLE_NAME, self.foreign_key),
                 "=",
                 self.value.clone(),
             )
             .where_not_null(&format!("{}.{}", Related::TABLE_NAME, self.foreign_key))
-            .limit(1);
-
-        Ok(query)
+            .limit(1)
     }
 
     /// Get the related models.
     async fn get(&mut self) -> Result<&Self::Value, Error> {
         if self.relation.is_none() {
-            let relation = self.query()?.first().await?.ok_or(Error::NotFound)?;
+            let relation = self.query().first().await?.ok_or(Error::NotFound)?;
 
             self.relation = Some(relation);
         }
