@@ -429,6 +429,7 @@ dependencies = [
  "Inflector",
  "async-trait",
  "ensemble_derive",
+ "fastdate",
  "itertools",
  "rbatis",
  "rbdc-mysql",
