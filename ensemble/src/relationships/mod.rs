@@ -29,6 +29,10 @@ pub trait Relationship {
     type Value;
 
     /// Get the related model.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the model cannot be retrieved, or if a connection to the database cannot be established.
     async fn get(&mut self) -> Result<&Self::Value, Error>;
 
     /// Get the query builder for the relationship.

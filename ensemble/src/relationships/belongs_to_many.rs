@@ -136,6 +136,10 @@ impl<Local: Model, Related: Model> Debug for BelongsToMany<Local, Related> {
 
 impl<Local: Model, Related: Model> Serialize for BelongsToMany<Local, Related> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if self.value == Default::default() {
+            return serializer.serialize_none();
+        }
+
         self.value.serialize(serializer)
     }
 }

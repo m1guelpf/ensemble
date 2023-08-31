@@ -1,21 +1,23 @@
-use std::rc::Rc;
-
 use inflector::Inflector;
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, quote_spanned};
+use std::rc::Rc;
 
 use super::field::Fields;
+use crate::Relationship;
 
-pub fn r#impl(name: &Ident, fields: &Fields) -> TokenStream {
-    let mut serde = impl_serialize(name, fields);
+pub fn r#impl(name: &Ident, fields: &Fields) -> syn::Result<TokenStream> {
+    let mut serde = impl_serialize(name, fields)?;
     serde.extend(impl_deserialize(name, fields));
 
-    serde
+    Ok(serde)
 }
 
-pub fn impl_serialize(name: &Ident, fields: &Fields) -> TokenStream {
+pub fn impl_serialize(name: &Ident, fields: &Fields) -> syn::Result<TokenStream> {
     let count = fields.fields.len();
-    let serialize_field = fields.fields.iter().map(|field| {
+    let primary_key = fields.primary_key()?;
+
+    let serialize_for_db = fields.fields.iter().filter_map(|field| {
         let ident = &field.ident;
         let column = field
             .attr
@@ -23,49 +25,51 @@ pub fn impl_serialize(name: &Ident, fields: &Fields) -> TokenStream {
             .as_ref()
             .map_or(field.ident.clone(), |v| Ident::new(v, field.span()));
 
-        quote_spanned! {field.span()=>
-            state.serialize_field(stringify!(#column), &self.#ident)?;
-        }
+        let Some((relationship_type, _, (_, key_expr))) = field.relationship(primary_key) else {
+            return Some(quote_spanned! {field.span()=>
+                state.serialize_field(stringify!(#column), &self.#ident)?;
+            });
+        };
+
+        match relationship_type {
+            Relationship::BelongsTo => {}
+            _ => return None,
+        };
+
+        Some(quote_spanned! {field.span()=> {
+            let key: &'static str = #key_expr.leak();
+            state.serialize_field(key, &self.#ident)?;
+        }})
     });
 
-    #[cfg(feature = "json")]
-    let serialize_fields = if fields.fields.iter().any(|f| f.attr.hide && !f.attr.show) {
-        let fields_with_hidden = fields.fields.iter().filter_map(|field| {
-            if field.attr.hide && !field.attr.show {
-                return None;
-            }
-
-            let ident = &field.ident;
-            let column = field
-                .attr
-                .column
-                .as_ref()
-                .map_or(field.ident.clone(), |v| Ident::new(v, field.span()));
-
-            Some(quote_spanned! {field.span()=>
-                state.serialize_field(stringify!(#column), &self.#ident)?;
-            })
-        });
-
-        quote! {
-            // ugly hack to figure out if we're serializing for rbs. might break in future (or previous) versions of rust.
-            if ::std::any::type_name::<S::Error>() == ::std::any::type_name::<::ensemble::rbs::Error>() {
-                #(#serialize_field)*
-            } else {
-                #(#fields_with_hidden)*
-            }
+    let general_serialize = fields.fields.iter().filter_map(|field| {
+        #[cfg(feature = "json")]
+        if field.attr.hide && !field.attr.show {
+            return None;
         }
-    } else {
-        quote! {
-            #(#serialize_field)*
+
+        let ident = &field.ident;
+        let column = field
+            .attr
+            .column
+            .as_ref()
+            .map_or(field.ident.clone(), |v| Ident::new(v, field.span()));
+
+        Some(quote_spanned! {field.span()=>
+            state.serialize_field(stringify!(#column), &self.#ident)?;
+        })
+    });
+
+    let serialize_fields = quote! {
+        // ugly hack to figure out if we're serializing for rbs. might break in future (or previous) versions of rust.
+        if ::std::any::type_name::<S::Error>() == ::std::any::type_name::<::ensemble::rbs::Error>() {
+            #(#serialize_for_db)*
+        } else {
+            #(#general_serialize)*
         }
     };
-    #[cfg(not(feature = "json"))]
-    let serialize_fields: TokenStream = quote! {
-        #(#serialize_field)*
-    };
 
-    quote! {
+    Ok(quote! {
         const _: () = {
             use ::ensemble::serde::ser::SerializeStruct;
             #[automatically_derived]
@@ -77,7 +81,7 @@ pub fn impl_serialize(name: &Ident, fields: &Fields) -> TokenStream {
                 }
             }
         };
-    }
+    })
 }
 
 pub fn impl_deserialize(name: &Ident, fields: &Fields) -> syn::Result<TokenStream> {

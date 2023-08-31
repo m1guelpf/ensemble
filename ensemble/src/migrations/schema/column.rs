@@ -1,5 +1,6 @@
 use ensemble_derive::Column;
-use std::{fmt::Display, rc::Rc, sync::mpsc};
+use itertools::Itertools;
+use std::{fmt::Display, sync::mpsc};
 
 use super::Schemable;
 
@@ -34,7 +35,6 @@ impl Display for Type {
                     values
                         .iter()
                         .map(|v| format!("'{}'", v.replace('\'', "\\'")))
-                        .collect::<Rc<_>>()
                         .join(", ")
                 );
                 f.write_str(&value)

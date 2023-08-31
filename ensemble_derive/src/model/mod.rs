@@ -44,7 +44,7 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     let eager_load_impl = impl_eager_load(&fields);
     let primary_key_impl = impl_primary_key(primary_key);
     let fill_relation_impl = impl_fill_relation(&fields);
-    let serde_impl = serde::r#impl(&ast.ident, &fields);
+    let serde_impl = serde::r#impl(&ast.ident, &fields)?;
     let default_impl = default::r#impl(&ast.ident, &fields)?;
     let save_impl = impl_save(fields.should_validate(), primary_key);
     let create_impl = impl_create(&ast.ident, &fields, primary_key)?;
@@ -226,24 +226,6 @@ fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> syn::Resul
         });
     }
 
-    let optional_increment = if primary_key
-        .attr
-        .default
-        .incrementing
-        .unwrap_or(is_primary_u64)
-    {
-        let primary_key = &primary_key.ident;
-        quote! {
-            |(mut model, id)| {
-                model.#primary_key = id;
-
-                model
-            }
-        }
-    } else {
-        quote! { |(mut model, _)| model }
-    };
-
     let run_validation = if fields.should_validate() {
         quote! {
             self.validate()?;
@@ -252,11 +234,31 @@ fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> syn::Resul
         TokenStream::new()
     };
 
+    let insert_and_return = if primary_key
+        .attr
+        .default
+        .incrementing
+        .unwrap_or(is_primary_u64)
+    {
+        let primary_key = &primary_key.ident;
+        quote! {
+            self.#primary_key = Self::query().insert(::ensemble::rbs::to_value(&self)?).await?;
+
+            Ok(self)
+        }
+    } else {
+        quote! {
+            Self::query().insert(::ensemble::rbs::to_value(&self)?).await?;
+
+            Ok(self)
+        }
+    };
+
     Ok(quote! {
-        async fn create(self) -> Result<Self, ::ensemble::query::Error> {
+        async fn create(mut self) -> Result<Self, ::ensemble::query::Error> {
             #run_validation
             #(#required)*
-            ::ensemble::query::create(self).await.map(#optional_increment)
+            #insert_and_return
         }
     })
 }

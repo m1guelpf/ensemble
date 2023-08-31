@@ -107,14 +107,15 @@ impl<Local: Model, Related: Model> Debug for BelongsTo<Local, Related> {
 
 impl<Local: Model, Related: Model> Serialize for BelongsTo<Local, Related> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if self.value == Default::default() {
+            return serializer.serialize_none();
+        }
+
         self.value.serialize(serializer)
     }
 }
 
-impl<Local: Model, Related: Model> PartialEq<Related> for BelongsTo<Local, Related>
-where
-    Related::PrimaryKey: PartialEq,
-{
+impl<Local: Model, Related: Model> PartialEq<Related> for BelongsTo<Local, Related> {
     fn eq(&self, other: &Related) -> bool {
         &self.value == other.primary_key()
     }

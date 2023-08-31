@@ -36,7 +36,7 @@ impl Schema {
         let mut conn = conn_lock.take().ok_or(Error::Lock)?;
 
         conn.exec(
-            dbg!(&format!(
+            &format!(
                 "CREATE TABLE {} ({}) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
                 table_name,
                 columns
@@ -44,7 +44,7 @@ impl Schema {
                     .map(Column::to_sql)
                     .chain(commands.iter().map(Command::to_sql))
                     .join(", "),
-            )),
+            ),
             vec![],
         )
         .await

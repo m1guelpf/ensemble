@@ -36,7 +36,14 @@ pub use ensemble_derive::Model;
 #[async_trait]
 pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + Default {
     /// The type of the primary key for the model.
-    type PrimaryKey: Display + DeserializeOwned + Serialize + Send + Sync + Clone;
+    type PrimaryKey: Display
+        + DeserializeOwned
+        + Serialize
+        + Send
+        + Sync
+        + Clone
+        + PartialEq
+        + Default;
 
     /// The name of the model.
     const NAME: &'static str;
