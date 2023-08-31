@@ -222,11 +222,13 @@ fn visitor_deserialize(
             .iter()
             .find(|k| &k.to_string() == relationship_key)
             .map_or_else(|| {
-                quote_spanned! {f.span()=>
+                quote_spanned! {f.span()=> {
+                    let key: &'static str = #relationship_expr.leak();
+
                     _serde::de::Deserialize::deserialize::<_serde::__private::de::ContentDeserializer<'_, _serde::de::value::Error>>(
-                        __collect.get(#relationship_expr).ok_or_else(|| _serde::de::Error::missing_field(#relationship_expr))?.clone().into_deserializer()
+                        __collect.get(key).ok_or_else(|| _serde::de::Error::missing_field(key))?.clone().into_deserializer()
                     ).unwrap()
-                }
+                }}
             }, |key| quote_spanned! {f.span()=> #key });
 
         let foreign_key = f.foreign_key(*relationship_type, primary_key);

@@ -199,7 +199,7 @@ impl Field {
                 self.ident.to_string(),
                 self.attr.foreign_key.as_ref().map_or_else(
                     || quote_spanned! {self.span() => format!("{}_{}", #related::NAME.to_snake_case(), #related::PRIMARY_KEY).to_snake_case() },
-                    |foreign_key| quote_spanned! {self.span() => #foreign_key }
+                    |foreign_key| quote_spanned! {self.span() => #foreign_key.to_string() }
                 ),
             ),
         };
