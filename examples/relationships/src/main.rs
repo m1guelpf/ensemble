@@ -25,7 +25,7 @@ pub struct Post {
     pub created_at: DateTime,
     pub updated_at: DateTime,
 
-    #[model(column = "author_id")]
+    #[model(foreign_key = "author_id")]
     pub user: BelongsTo<Post, User>,
 }
 
@@ -37,6 +37,9 @@ async fn main() {
 
     let mut user = User::find(1).await.expect("Failed to find user.");
     let posts = user.posts.get().await.expect("Failed to get posts.");
-
     dbg!(posts);
+
+    let mut post = Post::find(1).await.expect("Failed to find post.");
+    let user = post.user.get().await.expect("Failed to get user.");
+    dbg!(user);
 }

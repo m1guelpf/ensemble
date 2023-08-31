@@ -47,21 +47,17 @@ pub struct HasMany<Local: Model, Related: Model> {
 impl<Local: Model, Related: Model> Relationship for HasMany<Local, Related> {
     type Value = Vec<Related>;
     type Key = Local::PrimaryKey;
-    type ForeignKey = Option<String>;
+    type RelatedKey = Option<String>;
 
-    fn build(
-        value: Self::Key,
-        relation: Option<Self::Value>,
-        foreign_key: Self::ForeignKey,
-    ) -> Self {
+    fn build(value: Self::Key, foreign_key: Self::RelatedKey) -> Self {
         let foreign_key = foreign_key.unwrap_or_else(|| {
             format!("{}_{}", Local::NAME.to_snake_case(), Local::PRIMARY_KEY).to_snake_case()
         });
 
         Self {
             value,
-            relation,
             foreign_key,
+            relation: None,
         }
     }
 

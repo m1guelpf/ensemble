@@ -88,21 +88,29 @@ pub fn impl_deserialize(name: &Ident, fields: &Fields) -> syn::Result<TokenStrea
     let enum_key = &fields
         .fields
         .iter()
-        .map(|f| Ident::new(&f.ident.to_string().to_class_case(), f.span()))
+        .filter_map(|f| {
+            if f.has_relationship() {
+                return None;
+            }
+
+            Some(Ident::new(&f.ident.to_string().to_class_case(), f.span()))
+        })
         .collect::<Rc<_>>();
 
     let column = &fields
         .fields
         .iter()
-        .map(|f| {
+        .filter_map(|f| {
             if f.has_relationship() {
-                return f.ident.clone();
+                return None;
             }
 
-            f.attr
-                .column
-                .as_ref()
-                .map_or(f.ident.clone(), |v| Ident::new(v, f.span()))
+            Some(
+                f.attr
+                    .column
+                    .as_ref()
+                    .map_or(f.ident.clone(), |v| Ident::new(v, f.span())),
+            )
         })
         .collect::<Rc<_>>();
 
@@ -111,6 +119,7 @@ pub fn impl_deserialize(name: &Ident, fields: &Fields) -> syn::Result<TokenStrea
 
     Ok(quote! {
         const _: () = {
+            use ensemble::Inflector;
             use ::ensemble::serde as _serde;
             use _serde::de::IntoDeserializer;
             use ensemble::relationships::Relationship;
@@ -176,7 +185,12 @@ fn visitor_deserialize(
     enum_key: &Rc<[Ident]>,
 ) -> syn::Result<TokenStream> {
     let primary_key = fields.primary_key()?;
-    let key = &fields.fields.iter().map(|f| &f.ident).collect::<Rc<_>>();
+    let key = &fields
+        .fields
+        .iter()
+        .filter(|f| !f.has_relationship())
+        .map(|f| &f.ident)
+        .collect::<Rc<_>>();
 
     let required_checks = fields.fields.iter().filter_map(|f| {
         let ident = &f.ident;
@@ -186,31 +200,38 @@ fn visitor_deserialize(
             .as_ref()
             .map_or(f.ident.clone(), |v| Ident::new(v, f.span()));
 
+
         if f.has_relationship() {
-            None
-        } else {
-            Some(quote_spanned! {f.span()=> let #ident = #ident.ok_or_else(|| _serde::de::Error::missing_field(stringify!(#column)))?; })
+            return None;
         }
 
+        Some(quote_spanned! {f.span()=> let #ident = #ident.ok_or_else(|| _serde::de::Error::missing_field(stringify!(#column)))?; })
     });
 
     let model_keys = fields.fields.iter().map(|f| {
         let ident = &f.ident;
-        let Some((relationship_type, related, relationship_key)) = &f.relationship(primary_key) else {
+
+        let Some((relationship_type, related, (relationship_key, relationship_expr))) = &f.relationship(primary_key) else {
             return quote_spanned! {f.span()=> #ident: #ident };
         };
+
         let relationship_ident = Ident::new(&relationship_type.to_string(), f.span());
+
 
         let key_ident = key
             .iter()
             .find(|k| &k.to_string() == relationship_key)
             .map_or_else(|| {
-                quote_spanned! {f.span()=> _serde::de::Deserialize::deserialize::<_serde::__private::de::ContentDeserializer<'_, _serde::de::value::Error>>(__collect.get(#relationship_key).unwrap().clone().into_deserializer()).unwrap() }
+                quote_spanned! {f.span()=>
+                    _serde::de::Deserialize::deserialize::<_serde::__private::de::ContentDeserializer<'_, _serde::de::value::Error>>(
+                        __collect.get(#relationship_expr).ok_or_else(|| _serde::de::Error::missing_field(#relationship_expr))?.clone().into_deserializer()
+                    ).unwrap()
+                }
             }, |key| quote_spanned! {f.span()=> #key });
 
-        let foreign_key = f.foreign_key(*relationship_type);
+        let foreign_key = f.foreign_key(*relationship_type, primary_key);
 
-        quote_spanned! {f.span()=> #ident: <#relationship_ident<#name, #related>>::build(#key_ident, #ident, #foreign_key) }
+        quote_spanned! {f.span()=> #ident: <#relationship_ident<#name, #related>>::build(#key_ident, #foreign_key) }
     });
 
     let build_model = quote! {

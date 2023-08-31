@@ -47,13 +47,9 @@ pub struct BelongsToMany<Local: Model, Related: Model> {
 impl<Local: Model, Related: Model> Relationship for BelongsToMany<Local, Related> {
     type Value = Vec<Related>;
     type Key = Related::PrimaryKey;
-    type ForeignKey = (Option<String>, Option<String>, Option<String>);
+    type RelatedKey = (Option<String>, Option<String>, Option<String>);
 
-    fn build(
-        value: Self::Key,
-        relation: Option<Self::Value>,
-        (pivot_table, foreign_key, local_key): Self::ForeignKey,
-    ) -> Self {
+    fn build(value: Self::Key, (pivot_table, foreign_key, local_key): Self::RelatedKey) -> Self {
         let pivot_table = pivot_table.unwrap_or_else(|| {
             let mut names = [Local::NAME.to_string(), Related::NAME.to_string()];
             names.sort();
@@ -70,10 +66,10 @@ impl<Local: Model, Related: Model> Relationship for BelongsToMany<Local, Related
 
         Self {
             value,
-            relation,
             local_key,
             foreign_key,
             pivot_table,
+            relation: None,
             _local: std::marker::PhantomData,
         }
     }

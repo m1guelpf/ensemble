@@ -6,6 +6,8 @@
 #[doc(hidden)]
 pub use async_trait::async_trait;
 #[doc(hidden)]
+pub use inflector::Inflector;
+#[doc(hidden)]
 pub use rbs;
 #[doc(hidden)]
 pub use serde;
@@ -126,6 +128,16 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
         Ok(())
     }
 
+    /// Convert the model to a JSON value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the model cannot be converted to JSON. Since Ensemble manually implement Serialize, this should never happen.
+    #[cfg(feature = "json")]
+    fn json(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap()
+    }
+
     /// Eager load a relationship for a set of models.
     /// This method is used internally by Ensemble, and should not be called directly.
     #[doc(hidden)]
@@ -139,14 +151,4 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
         relation: &str,
         related: &[HashMap<String, rbs::Value>],
     ) -> Result<(), query::Error>;
-
-    /// Convert the model to a JSON value.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the model cannot be converted to JSON. Since Ensemble manually implement Serialize, this should never happen.
-    #[cfg(feature = "json")]
-    fn json(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap()
-    }
 }
