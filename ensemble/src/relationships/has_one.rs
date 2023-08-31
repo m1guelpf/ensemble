@@ -112,3 +112,16 @@ impl<Local: Model, Related: Model> Serialize for HasOne<Local, Related> {
         self.value.serialize(serializer)
     }
 }
+
+#[cfg(feature = "schema")]
+impl<Local: Model, Related: Model + schemars::JsonSchema> schemars::JsonSchema
+    for HasOne<Local, Related>
+{
+    fn schema_name() -> String {
+        <Option<Related>>::schema_name()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        gen.subschema_for::<Option<Related>>()
+    }
+}

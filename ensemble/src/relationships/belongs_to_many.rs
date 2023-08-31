@@ -139,3 +139,16 @@ impl<Local: Model, Related: Model> Serialize for BelongsToMany<Local, Related> {
         self.value.serialize(serializer)
     }
 }
+
+#[cfg(feature = "schema")]
+impl<Local: Model, Related: Model + schemars::JsonSchema> schemars::JsonSchema
+    for BelongsToMany<Local, Related>
+{
+    fn schema_name() -> String {
+        <Option<Vec<Related>>>::schema_name()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        gen.subschema_for::<Option<Vec<Related>>>()
+    }
+}

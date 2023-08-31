@@ -119,3 +119,16 @@ where
         &self.value == other.primary_key()
     }
 }
+
+#[cfg(feature = "schema")]
+impl<Local: Model, Related: Model + schemars::JsonSchema> schemars::JsonSchema
+    for BelongsTo<Local, Related>
+{
+    fn schema_name() -> String {
+        <Option<Related>>::schema_name()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        gen.subschema_for::<Option<Related>>()
+    }
+}
