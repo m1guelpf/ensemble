@@ -1,6 +1,6 @@
 use deluxe::ExtractAttributes;
 use quote::ToTokens;
-use syn::{spanned::Spanned, Expr, FieldsNamed};
+use syn::{spanned::Spanned, Attribute, Expr, FieldsNamed, Lit};
 
 pub struct Fields {
     ast: FieldsNamed,
@@ -15,14 +15,16 @@ impl Fields {
 
 pub struct Field {
     pub attr: Attr,
+    ast: syn::Field,
     pub ty: syn::Type,
     pub ident: syn::Ident,
-    ast: syn::Field,
+    pub doc: Option<String>,
 }
 
 #[derive(ExtractAttributes, Default)]
 #[deluxe(attributes(builder), default)]
 pub struct Attr {
+    pub skip: bool,
     pub init: bool,
     pub into: bool,
     pub needs: Option<Expr>,
@@ -40,8 +42,27 @@ impl Field {
             attr,
             ident,
             ty: field.ty.clone(),
+            doc: Self::get_doc(&field.attrs),
             ast: field,
         }
+    }
+
+    fn get_doc(attrs: &[Attribute]) -> Option<String> {
+        attrs
+            .iter()
+            .find(|attr| attr.meta.path().is_ident("doc"))
+            .and_then(|attr| {
+                attr.meta.require_name_value().ok().and_then(|meta| {
+                    let Expr::Lit(lit) = &meta.value else {
+                        return None;
+                    };
+
+                    match &lit.lit {
+                        Lit::Str(s) => Some(s.value()),
+                        _ => None,
+                    }
+                })
+            })
     }
 
     pub fn span(&self) -> proc_macro2::Span {

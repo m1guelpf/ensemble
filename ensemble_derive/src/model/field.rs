@@ -1,7 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
 use deluxe::ExtractAttributes;
-use inflector::Inflector;
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{spanned::Spanned, FieldsNamed, GenericArgument, PathArguments, Type};
@@ -112,7 +111,7 @@ impl Field {
             Some(quote_spanned! { self.span() => <#ty>::now() })
         } else if let Some((relationship_type, related, _)) = self.relationship(primary_key) {
             let relationship_ident = Ident::new(&relationship_type.to_string(), self.span());
-            let foreign_key = self.foreign_key(relationship_type);
+            let foreign_key = self.foreign_key(relationship_type, primary_key);
 
             if self.attr.column == Some(self.ident.to_string()) {
                 return Err(syn::Error::new_spanned(
@@ -122,14 +121,18 @@ impl Field {
             }
 
             Some(
-                quote_spanned! { self.span() => <#relationship_ident<#name, #related>>::build(Default::default(), None, #foreign_key) },
+                quote_spanned! { self.span() => <#relationship_ident<#name, #related>>::build(Default::default(), #foreign_key) },
             )
         } else {
             None
         })
     }
 
-    pub(crate) fn foreign_key(&self, relationship_type: Relationship) -> TokenStream {
+    pub(crate) fn foreign_key(
+        &self,
+        relationship_type: Relationship,
+        primary_key: &Self,
+    ) -> TokenStream {
         match relationship_type {
             Relationship::BelongsToMany => {
                 let local_key = wrap_option(self.attr.local_key.clone());
@@ -137,6 +140,10 @@ impl Field {
                 let foreign_key = wrap_option(self.attr.foreign_key.clone());
 
                 quote_spanned! {self.span()=> (#pivot_table, #foreign_key, #local_key) }
+            }
+            Relationship::BelongsTo => {
+                let primary_key = &primary_key.ident;
+                quote_spanned! {self.span()=> Some(stringify!(#primary_key).to_string()) }
             }
             _ => wrap_option(self.attr.foreign_key.clone()),
         }
@@ -154,7 +161,10 @@ impl Field {
         ["HasOne", "HasMany", "BelongsTo", "BelongsToMany"].contains(&ty.ident.to_string().as_str())
     }
 
-    pub(crate) fn relationship(&self, primary_key: &Self) -> Option<(Relationship, Ident, String)> {
+    pub(crate) fn relationship(
+        &self,
+        primary_key: &Self,
+    ) -> Option<(Relationship, Ident, (String, TokenStream))> {
         let Type::Path(ty) = &self.ty else {
             return None;
         };
@@ -181,14 +191,17 @@ impl Field {
         let related = &ty.path.segments.first().unwrap().ident;
 
         let value_key = match relationship_type {
-            Relationship::BelongsToMany | Relationship::HasOne | Relationship::HasMany => {
-                primary_key.ident.to_string()
-            }
-            Relationship::BelongsTo => self
-                .attr
-                .column
-                .clone()
-                .unwrap_or_else(|| related.to_string().to_foreign_key()),
+            Relationship::BelongsToMany | Relationship::HasOne | Relationship::HasMany => (
+                primary_key.ident.to_string(),
+                primary_key.ident.to_token_stream(),
+            ),
+            Relationship::BelongsTo => (
+                self.ident.to_string(),
+                self.attr.foreign_key.as_ref().map_or_else(
+                    || quote_spanned! {self.span() => format!("{}_{}", #related::NAME.to_snake_case(), #related::PRIMARY_KEY).to_snake_case() },
+                    |foreign_key| quote_spanned! {self.span() => #foreign_key.to_string() }
+                ),
+            ),
         };
 
         Some((relationship_type, related.clone(), value_key))
@@ -256,7 +269,7 @@ impl Fields {
             .relationships()
             .iter()
             .filter_map(|f| f.relationship(primary_key))
-            .map(|(_, _, key)| key)
+            .map(|(_, _, (key, _))| key)
             .collect::<Rc<_>>();
 
         self.fields

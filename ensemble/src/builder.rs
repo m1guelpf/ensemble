@@ -244,13 +244,9 @@ impl Builder {
     ///
     /// Returns an error if the query fails, or if a connection to the database cannot be established.
     pub async fn get<M: Model>(self) -> Result<Vec<M>, Error> {
-        let mut conn = connection::get().await?;
-        let values = conn
-            .get_values(&self.to_sql(QueryType::Select), self.get_bindings())
-            .await
-            .map_err(|s| Error::Database(s.to_string()))?;
-
-        let mut models = values
+        let mut models = self
+            ._get()
+            .await?
             .into_iter()
             .map(value::from::<M>)
             .collect::<Result<Vec<M>, rbs::Error>>()?;
@@ -279,16 +275,10 @@ impl Builder {
     /// # Errors
     ///
     /// Returns an error if the query fails, or if a connection to the database cannot be established.
-    pub async fn get_rows(&self) -> Result<Vec<HashMap<String, Value>>, Error> {
-        let mut conn = connection::get().await?;
-        let (sql, bindings) = (self.to_sql(QueryType::Select), self.get_bindings());
-
-        let values = conn
-            .get_values(&sql, bindings)
-            .await
-            .map_err(|s| Error::Database(s.to_string()))?;
-
-        let values = values
+    pub(crate) async fn get_rows(&self) -> Result<Vec<HashMap<String, Value>>, Error> {
+        let values = self
+            ._get()
+            .await?
             .into_iter()
             .map(|v| {
                 let Value::Map(map) = v else { unreachable!() };
@@ -302,12 +292,48 @@ impl Builder {
         Ok(values)
     }
 
+    /// Insert a new record into the database. Returns the ID of the inserted record, if applicable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails, or if a connection to the database cannot be established.
+    pub async fn insert<Id: for<'de> serde::Deserialize<'de>, T: Into<Columns> + Send>(
+        &self,
+        columns: T,
+    ) -> Result<Id, Error> {
+        if self.limit.is_some()
+            || !self.join.is_empty()
+            || !self.order.is_empty()
+            || !self.r#where.is_empty()
+        {
+            return Err(Error::InvalidQuery);
+        }
+
+        let mut conn = connection::get().await?;
+        let values: Vec<(String, Value)> = columns.into().0;
+
+        let result = conn
+            .exec(
+                &format!(
+                    "INSERT INTO {} ({}) VALUES ({})",
+                    self.table,
+                    values.iter().map(|(column, _)| column).join(", "),
+                    values.iter().map(|_| "?").join(", ")
+                ),
+                values.into_iter().map(|(_, value)| value).collect(),
+            )
+            .await
+            .map_err(|e| Error::Database(e.to_string()))?;
+
+        Ok(rbs::from_value(result.last_insert_id)?)
+    }
+
     /// Update records in the database. Returns the number of affected rows.
     ///
     /// # Errors
     ///
     /// Returns an error if the query fails, or if a connection to the database cannot be established.
-    pub async fn update<T: Into<Update> + Send>(self, values: T) -> Result<u64, Error> {
+    pub async fn update<T: Into<Columns> + Send>(self, values: T) -> Result<u64, Error> {
         let mut conn = connection::get().await?;
         let sql = self.to_sql(QueryType::Update);
         let values: Vec<(String, Value)> = values.into().0;
@@ -361,6 +387,20 @@ impl Builder {
     }
 }
 
+impl Builder {
+    async fn _get(&self) -> Result<Vec<Value>, Error> {
+        let mut conn = connection::get().await?;
+        let (sql, bindings) = (self.to_sql(QueryType::Select), self.get_bindings());
+
+        let values = conn
+            .get_values(&sql, bindings)
+            .await
+            .map_err(|s| Error::Database(s.to_string()))?;
+
+        Ok(values)
+    }
+}
+
 pub enum EagerLoad {
     Single(String),
     Multiple(Vec<String>),
@@ -388,10 +428,10 @@ impl From<Vec<&str>> for EagerLoad {
     }
 }
 
-pub struct Update(Vec<(String, Value)>);
+pub struct Columns(Vec<(String, Value)>);
 
 #[allow(clippy::fallible_impl_from)]
-impl From<Value> for Update {
+impl From<Value> for Columns {
     fn from(value: Value) -> Self {
         match value {
             Value::Map(map) => Self(
@@ -404,7 +444,7 @@ impl From<Value> for Update {
     }
 }
 
-impl<T: Serialize> From<Vec<(&str, T)>> for Update {
+impl<T: Serialize> From<Vec<(&str, T)>> for Columns {
     fn from(values: Vec<(&str, T)>) -> Self {
         Self(
             values
@@ -414,7 +454,7 @@ impl<T: Serialize> From<Vec<(&str, T)>> for Update {
         )
     }
 }
-impl<T: Serialize> From<&[(&str, T)]> for Update {
+impl<T: Serialize> From<&[(&str, T)]> for Columns {
     fn from(values: &[(&str, T)]) -> Self {
         Self(
             values

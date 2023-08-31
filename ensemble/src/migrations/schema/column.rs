@@ -1,5 +1,6 @@
 use ensemble_derive::Column;
-use std::{fmt::Display, rc::Rc, sync::mpsc};
+use itertools::Itertools;
+use std::{fmt::Display, sync::mpsc};
 
 use super::Schemable;
 
@@ -34,7 +35,6 @@ impl Display for Type {
                     values
                         .iter()
                         .map(|v| format!("'{}'", v.replace('\'', "\\'")))
-                        .collect::<Rc<_>>()
                         .join(", ")
                 );
                 f.write_str(&value)
@@ -64,6 +64,7 @@ pub struct Column {
     /// Add a comment to the column
     comment: Option<String>,
     /// Specify a "default" value for the column
+    #[builder(skip)]
     default: Option<rbs::Value>,
     /// Add an index
     index: Option<String>,
@@ -89,6 +90,13 @@ pub struct Column {
 }
 
 impl Column {
+    /// Specify a "default" value for the column
+    pub fn default<T: serde::Serialize>(mut self, default: T) -> Self {
+        self.default = Some(rbs::to_value!(default));
+
+        self
+    }
+
     pub(crate) fn to_sql(&self) -> String {
         let mut sql = format!("{} {}", self.name, self.r#type);
 

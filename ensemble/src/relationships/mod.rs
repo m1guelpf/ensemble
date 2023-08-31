@@ -20,7 +20,7 @@ use rbs::{to_value, Value};
 #[async_trait::async_trait]
 pub trait Relationship {
     /// The provided input for the relationship.
-    type ForeignKey;
+    type RelatedKey;
 
     /// The type of the primary key for the model.
     type Key;
@@ -29,6 +29,10 @@ pub trait Relationship {
     type Value;
 
     /// Get the related model.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the model cannot be retrieved, or if a connection to the database cannot be established.
     async fn get(&mut self) -> Result<&Self::Value, Error>;
 
     /// Get the query builder for the relationship.
@@ -52,11 +56,7 @@ pub trait Relationship {
 
     /// Create an instance of the relationship. Not intended to be used directly.
     #[doc(hidden)]
-    fn build(
-        value: Self::Key,
-        relation: Option<Self::Value>,
-        foreign_key: Self::ForeignKey,
-    ) -> Self;
+    fn build(value: Self::Key, related_key: Self::RelatedKey) -> Self;
 }
 
 fn find_related<M: Model, T: serde::Serialize>(

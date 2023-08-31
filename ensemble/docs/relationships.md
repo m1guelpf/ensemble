@@ -96,23 +96,7 @@ struct User {
 }
 ```
 
-Additionally, Ensemble assumes that the foreign key should have a value matching the primary key column of the parent. In other words, Ensemble will look for the value of the user's primary column in the `user_id` column of the `Phone` record. If you would like the relationship to use a separate value from your model's primary key, you may use the `#[model(column)]` attribute:
-
-```rust
-# use ensemble::{Model, relationships::HasOne};
-# #[derive(Debug, Model)]
-# struct Phone {
-#    id: u64
-# }
-#[derive(Debug, Model)]
-struct User {
-    id: u64,
-    name: String,
-
-    #[model(column = "local_key")]
-    phone: HasOne<User, Phone>
-}
-```
+Additionally, Ensemble assumes that the foreign key should have a value matching the primary key column of the parent. In other words, Ensemble will look for the value of the user's primary column in the `user_id` column of the `Phone` record. This is currently not customizable due to the intricacies of Rust's type system. If you have a good reason to need this, [open an issue!](https://github.com/m1guelpf/ensemble/issues/new).
 
 #### Defining The Inverse Of The Relationship
 
@@ -155,24 +139,7 @@ struct Phone {
 }
 ```
 
-If you wish to find the associated model using a different column than the model's primary key, you may specify the parent table's custom key using the `#[model(column)]` attribute:
-
-```rust
-# use ensemble::{Model, relationships::BelongsTo};
-# #[derive(Debug, Model)]
-# struct User {
-#    #[model(primary)]
-#    uuid: u64
-# }
-#[derive(Debug, Model)]
-struct Phone {
-    id: u64,
-    number: String,
-
-    #[model(foreign_key = "author_id", column = "uuid")]
-    user: BelongsTo<Phone, User>
-}
-```
+Similar to the [`HasOne`] relationship, Ensemble will assume that the foreign key should have a value matching the primary key column of the parent.
 
 ### One To Many
 
@@ -245,7 +212,7 @@ let comment: Option<Comment> = post.comments.query()
 # }
 ```
 
-Like the [`HasOne`] relationship, you may also override the foreign and local keys with the `#[model(foreign_key)]` and `#[model(column)]` attributes:
+Like the [`HasOne`] relationship, you may also override the foreign key with the `#[model(foreign_key)]` attribute:
 
 ```rust
 # use ensemble::{Model, relationships::HasMany};
@@ -259,7 +226,7 @@ struct Post {
     title: String,
     content: String,
 
-    #[model(foreign_key = "post_title", column = "title")]
+    #[model(foreign_key = "article_id")]
     comments: HasMany<Post, Comment>
 }
 ```
@@ -325,24 +292,6 @@ struct Comment {
     content: String,
 
     #[model(foreign_key = "article_id")]
-    post: BelongsTo<Comment, Post>
-}
-```
-
-If you wish to find the associated model using a different column than the model's primary key, you may specify the parent table's custom key using the `#[model(column)]` attribute:
-
-```rust
-# use ensemble::{Model, relationships::BelongsTo};
-# #[derive(Debug, Model)]
-# struct Post {
-#    id: u64,
-# }
-#[derive(Debug, Model)]
-struct Comment {
-    id: u64,
-    content: String,
-
-    #[model(column = "uuid", foreign_key = "article_id")]
     post: BelongsTo<Comment, Post>
 }
 ```

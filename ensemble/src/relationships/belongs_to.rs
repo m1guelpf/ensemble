@@ -35,7 +35,7 @@ use crate::{builder::Builder, query::Error, Model};
 /// ```
 #[derive(Clone, Default)]
 pub struct BelongsTo<Local: Model, Related: Model> {
-    foreign_key: String,
+    local_key: String,
     relation: Option<Related>,
     _local: std::marker::PhantomData<Local>,
     /// The value of the local model's related key.
@@ -46,21 +46,15 @@ pub struct BelongsTo<Local: Model, Related: Model> {
 impl<Local: Model, Related: Model> Relationship for BelongsTo<Local, Related> {
     type Value = Related;
     type Key = Related::PrimaryKey;
-    type ForeignKey = Option<String>;
+    type RelatedKey = Option<String>;
 
-    fn build(
-        value: Self::Key,
-        relation: Option<Self::Value>,
-        foreign_key: Self::ForeignKey,
-    ) -> Self {
-        let foreign_key = foreign_key.unwrap_or_else(|| {
-            format!("{}_{}", Related::NAME.to_snake_case(), Related::PRIMARY_KEY).to_snake_case()
-        });
+    fn build(value: Self::Key, local_key: Self::RelatedKey) -> Self {
+        let local_key = local_key.unwrap_or_else(|| Related::PRIMARY_KEY.to_snake_case());
 
         Self {
             value,
-            relation,
-            foreign_key,
+            local_key,
+            relation: None,
             _local: std::marker::PhantomData,
         }
     }
@@ -68,7 +62,7 @@ impl<Local: Model, Related: Model> Relationship for BelongsTo<Local, Related> {
     fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
         Related::query()
             .r#where(
-                &format!("{}.{}", Local::TABLE_NAME, self.foreign_key),
+                &format!("{}.{}", Related::TABLE_NAME, self.local_key),
                 "in",
                 related,
             )
@@ -78,7 +72,7 @@ impl<Local: Model, Related: Model> Relationship for BelongsTo<Local, Related> {
     fn query(&self) -> Builder {
         Related::query()
             .r#where(
-                &format!("{}.{}", Local::TABLE_NAME, self.foreign_key),
+                &format!("{}.{}", Related::TABLE_NAME, self.local_key),
                 "=",
                 self.value.clone(),
             )
@@ -97,7 +91,7 @@ impl<Local: Model, Related: Model> Relationship for BelongsTo<Local, Related> {
     }
 
     fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
-        let related = find_related(related, &self.foreign_key, &self.value, true)?;
+        let related = find_related(related, &self.local_key, &self.value, true)?;
 
         self.relation = related.into_iter().next();
 
@@ -113,6 +107,29 @@ impl<Local: Model, Related: Model> Debug for BelongsTo<Local, Related> {
 
 impl<Local: Model, Related: Model> Serialize for BelongsTo<Local, Related> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if self.value == Default::default() {
+            return serializer.serialize_none();
+        }
+
         self.value.serialize(serializer)
+    }
+}
+
+impl<Local: Model, Related: Model> PartialEq<Related> for BelongsTo<Local, Related> {
+    fn eq(&self, other: &Related) -> bool {
+        &self.value == other.primary_key()
+    }
+}
+
+#[cfg(feature = "schema")]
+impl<Local: Model, Related: Model + schemars::JsonSchema> schemars::JsonSchema
+    for BelongsTo<Local, Related>
+{
+    fn schema_name() -> String {
+        <Option<Related>>::schema_name()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        gen.subschema_for::<Option<Related>>()
     }
 }

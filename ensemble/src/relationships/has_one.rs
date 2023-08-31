@@ -45,21 +45,17 @@ pub struct HasOne<Local: Model, Related: Model> {
 impl<Local: Model, Related: Model> Relationship for HasOne<Local, Related> {
     type Value = Related;
     type Key = Local::PrimaryKey;
-    type ForeignKey = Option<String>;
+    type RelatedKey = Option<String>;
 
-    fn build(
-        value: Self::Key,
-        relation: Option<Self::Value>,
-        foreign_key: Self::ForeignKey,
-    ) -> Self {
+    fn build(value: Self::Key, foreign_key: Self::RelatedKey) -> Self {
         let foreign_key = foreign_key.unwrap_or_else(|| {
             format!("{}_{}", Local::NAME.to_snake_case(), Local::PRIMARY_KEY).to_snake_case()
         });
 
         Self {
             value,
-            relation,
             foreign_key,
+            relation: None,
         }
     }
 
@@ -113,6 +109,23 @@ impl<Local: Model, Related: Model> Debug for HasOne<Local, Related> {
 
 impl<Local: Model, Related: Model> Serialize for HasOne<Local, Related> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if self.value == Default::default() {
+            return serializer.serialize_none();
+        }
+
         self.value.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "schema")]
+impl<Local: Model, Related: Model + schemars::JsonSchema> schemars::JsonSchema
+    for HasOne<Local, Related>
+{
+    fn schema_name() -> String {
+        <Option<Related>>::schema_name()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        gen.subschema_for::<Option<Related>>()
     }
 }
