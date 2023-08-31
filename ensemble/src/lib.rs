@@ -33,6 +33,7 @@ mod value;
 pub use connection::setup;
 #[cfg(any(feature = "mysql", feature = "postgres"))]
 pub use connection::get as get_connection;
+pub use rbs::to_value;
 pub use ensemble_derive::Model;
 
 #[async_trait]
