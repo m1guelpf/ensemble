@@ -181,7 +181,7 @@ fn impl_save(should_validate: bool, primary_key: &Field) -> TokenStream {
             #run_validation
 
             let rows_affected = Self::query()
-                .r#where(Self::PRIMARY_KEY, "=", self.#ident)
+                .r#where(Self::PRIMARY_KEY, "=", &self.#ident)
                 .update(::ensemble::rbs::to_value!(self))
                 .await?;
 

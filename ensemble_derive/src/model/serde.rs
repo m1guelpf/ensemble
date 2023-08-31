@@ -71,7 +71,7 @@ pub fn impl_serialize(name: &Ident, fields: &Fields) -> syn::Result<TokenStream>
 
     Ok(quote! {
         const _: () = {
-            use ensemble::Inflector;
+            use ::ensemble::Inflector;
             use ::ensemble::serde::ser::SerializeStruct;
             #[automatically_derived]
             impl ::ensemble::serde::Serialize for #name {
