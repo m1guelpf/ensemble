@@ -71,6 +71,7 @@ fn impl_set(fields: &Fields) -> syn::Result<TokenStream> {
 
     not_init
         .iter()
+        .filter(|f| !f.attr.skip)
         .map(|f| {
             let ty = &f.ty;
             let option = get_option_inner(ty);
@@ -93,6 +94,8 @@ fn impl_set(fields: &Fields) -> syn::Result<TokenStream> {
             };
             let iden = &f.ident;
             let assign = build_assign(f, is_string, option.is_some());
+            let doc = f.doc.as_ref().map_or_else(TokenStream::new, |doc| quote_spanned! {f.span()=> #[doc = #doc] });
+
 
             let only_types = &f.attr.types;
             let alias = f
@@ -115,6 +118,7 @@ fn impl_set(fields: &Fields) -> syn::Result<TokenStream> {
 
             Ok(quote_spanned! {f.span()=>
                 #[allow(clippy::return_self_not_must_use, clippy::must_use_candidate)]
+                #doc
                 pub fn #alias #fn_constrain (mut self, #iden: #fn_ty) -> Self {
                     #types_constraint
                     #needs
