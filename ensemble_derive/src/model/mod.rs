@@ -127,7 +127,7 @@ fn impl_fresh(primary_key: &Field) -> TokenStream {
 
     quote! {
         async fn fresh(&self) -> Result<Self, ::ensemble::query::Error> {
-            Self::find(self.#ident).await
+            Self::find(self.#ident.clone()).await
         }
     }
 }
