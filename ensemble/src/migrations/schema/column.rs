@@ -1,10 +1,11 @@
 use ensemble_derive::Column;
 use itertools::Itertools;
+use rbs::Value;
 use std::{fmt::Display, sync::mpsc};
 
 use super::Schemable;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Json,
     Uuid,
@@ -92,7 +93,20 @@ pub struct Column {
 impl Column {
     /// Specify a "default" value for the column
     pub fn default<T: serde::Serialize>(mut self, default: T) -> Self {
-        self.default = Some(rbs::to_value!(default));
+        let value = if self.r#type == Type::Json {
+            Value::String(serde_json::to_string(&default).unwrap())
+        } else {
+            rbs::to_value!(default)
+        };
+
+        if let Type::Enum(values) = &self.r#type {
+            assert!(
+                values.contains(&value.as_str().unwrap_or_default().to_string()),
+                "default value must be one of the enum values"
+            );
+        }
+
+        self.default = Some(value);
 
         self
     }
