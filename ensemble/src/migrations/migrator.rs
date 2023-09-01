@@ -178,11 +178,7 @@ impl Migrator {
     }
 
     async fn get_state(conn: &mut Connection) -> Result<Vec<StoredMigration>, Error> {
-        let sql = "create table if not exists migrations (
-            id int unsigned not null auto_increment primary key,
-            migration varchar(255) not null,
-            batch int not null
-        )";
+        let sql = migrations_table_query();
 
         tracing::debug!(sql = sql, "Running CREATE TABLE IF NOT EXISTS SQL query");
 
@@ -205,4 +201,23 @@ pub struct StoredMigration {
     id: u64,
     batch: u64,
     migration: String,
+}
+
+fn migrations_table_query() -> &'static str {
+    #[cfg(feature = "mysql")]
+    return "create table if not exists migrations (
+        id int unsigned not null auto_increment primary key,
+        migration varchar(255) not null,
+        batch int not null
+    )";
+
+    #[cfg(feature = "postgres")]
+    return "create table if not exists migrations (
+        id serial primary key,
+        migration varchar(255) not null,
+        batch int not null
+    )";
+
+    #[cfg(all(not(feature = "mysql"), not(feature = "postgres")))]
+    panic!("either the `mysql` or `postgres` feature must be enabled to use migrations.");
 }
