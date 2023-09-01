@@ -36,13 +36,18 @@ impl Schema {
         let mut conn = conn_lock.take().ok_or(Error::Lock)?;
 
         let sql = format!(
-            "CREATE TABLE {} ({}) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            "CREATE TABLE {} ({}) {}",
             table_name,
             columns
                 .iter()
                 .map(Column::to_sql)
                 .chain(commands.iter().map(Command::to_sql))
                 .join(", "),
+            if cfg!(feature = "mysql") {
+                "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            } else {
+                ""
+            }
         );
 
         tracing::debug!(sql = sql.as_str(), "Running CREATE TABLE SQL query");
