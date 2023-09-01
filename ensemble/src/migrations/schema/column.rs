@@ -76,6 +76,7 @@ pub struct Column {
     /// Add a unique index
     unique: bool,
     /// Set the INTEGER column as UNSIGNED
+    #[cfg(feature = "mysql")]
     #[builder(type = Type::BigInteger)]
     unsigned: bool,
     /// Set the TIMESTAMP column to use CURRENT_TIMESTAMP as default value
@@ -114,6 +115,7 @@ impl Column {
     pub(crate) fn to_sql(&self) -> String {
         let mut sql = format!("{} {}", self.name, self.r#type);
 
+        #[cfg(feature = "mysql")]
         if self.unsigned {
             sql.push_str(" unsigned");
         }

@@ -115,10 +115,19 @@ pub struct Table {
 impl Table {
     /// Creates a primary key incrementing integer column called `id`.
     pub fn id(&mut self) -> Column {
-        Column::new("id".to_string(), Type::BigInteger, self.sender.clone())
+        let column = Column::new("id".to_string(), Type::BigInteger, self.sender.clone())
             .primary(true)
-            .unsigned(true)
-            .increments(true)
+            .increments(true);
+
+        #[cfg(feature = "mysql")]
+        {
+            return column.unsigned(true);
+        }
+
+        #[cfg(not(feature = "mysql"))]
+        {
+            column
+        }
     }
 
     /// Create a primary key UUID column called `id`.
@@ -177,7 +186,13 @@ impl Table {
         let column = format!("{}_{}", M::NAME, M::PRIMARY_KEY).to_snake_case();
 
         if ["u64", "u32", "u16", "u8", "usize"].contains(&type_name::<M::PrimaryKey>()) {
-            Column::new(column.clone(), Type::BigInteger, self.sender.clone()).unsigned(true);
+            #[allow(unused_variables)]
+            let column = Column::new(column.clone(), Type::BigInteger, self.sender.clone());
+
+            #[cfg(feature = "mysql")]
+            {
+                column.unsigned(true);
+            };
         } else {
             Column::new(column.clone(), Type::String(255), self.sender.clone());
         }
@@ -188,7 +203,13 @@ impl Table {
 
     /// Create a foreign ID column for the given model.
     pub fn foreign_id(&mut self, name: &str) -> ForeignIndex {
-        Column::new(name.to_string(), Type::BigInteger, self.sender.clone()).unsigned(true);
+        #[allow(unused_variables)]
+        let column = Column::new(name.to_string(), Type::BigInteger, self.sender.clone());
+
+        #[cfg(feature = "mysql")]
+        {
+            column.unsigned(true);
+        };
 
         let index = ForeignIndex::new(name.to_string(), self.sender.clone());
 
