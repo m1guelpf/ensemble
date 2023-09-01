@@ -178,16 +178,17 @@ impl Migrator {
     }
 
     async fn get_state(conn: &mut Connection) -> Result<Vec<StoredMigration>, Error> {
-        conn.exec(
-            "create table if not exists migrations (
-                id int unsigned not null auto_increment primary key,
-                migration varchar(255) not null,
-                batch int not null
-            )",
-            vec![],
-        )
-        .await
-        .map_err(|e| Error::Database(e.to_string()))?;
+        let sql = "create table if not exists migrations (
+            id int unsigned not null auto_increment primary key,
+            migration varchar(255) not null,
+            batch int not null
+        )";
+
+        tracing::debug!(sql = sql, "Running CREATE TABLE IF NOT EXISTS SQL query");
+
+        conn.exec(sql, vec![])
+            .await
+            .map_err(|e| Error::Database(e.to_string()))?;
 
         Ok(conn
             .get_values("select * from migrations", vec![])
