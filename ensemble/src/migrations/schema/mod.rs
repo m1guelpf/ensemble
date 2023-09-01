@@ -35,20 +35,21 @@ impl Schema {
         let mut conn_lock = MIGRATE_CONN.try_lock().map_err(|_| Error::Lock)?;
         let mut conn = conn_lock.take().ok_or(Error::Lock)?;
 
-        conn.exec(
-            &format!(
-                "CREATE TABLE {} ({}) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-                table_name,
-                columns
-                    .iter()
-                    .map(Column::to_sql)
-                    .chain(commands.iter().map(Command::to_sql))
-                    .join(", "),
-            ),
-            vec![],
-        )
-        .await
-        .map_err(|e| Error::Database(e.to_string()))?;
+        let sql = format!(
+            "CREATE TABLE {} ({}) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            table_name,
+            columns
+                .iter()
+                .map(Column::to_sql)
+                .chain(commands.iter().map(Command::to_sql))
+                .join(", "),
+        );
+
+        tracing::debug!(sql = sql.as_str(), "Running CREATE TABLE SQL query");
+
+        conn.exec(&sql, vec![])
+            .await
+            .map_err(|e| Error::Database(e.to_string()))?;
 
         conn_lock.replace(conn);
         drop(conn_lock);
@@ -63,8 +64,11 @@ impl Schema {
     /// Returns an error if the table cannot be dropped, or if a connection to the database cannot be established.
     pub async fn drop(table_name: &str) -> Result<(), Error> {
         let mut conn = connection::get().await?;
+        let (sql, bindings) = (format!("DROP TABLE ?"), vec![to_value!(table_name)]);
 
-        conn.exec(&format!("DROP TABLE ?"), vec![to_value!(table_name)])
+        tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Running DROP TABLE SQL query");
+
+        conn.exec(&sql, bindings)
             .await
             .map_err(|e| Error::Database(e.to_string()))?;
 

@@ -96,7 +96,7 @@ impl<T: Sha256Digest> validator::HasLen for &Hashed<T> {
 #[cfg(feature = "schema")]
 impl<T: Sha256Digest> schemars::JsonSchema for Hashed<T> {
     fn schema_name() -> String {
-        String::from("String")
+        String::schema_name()
     }
 
     fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {

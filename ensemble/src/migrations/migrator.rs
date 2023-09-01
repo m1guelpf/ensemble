@@ -31,6 +31,12 @@ impl Migrator {
             .unwrap_or_default()
             .saturating_add(1);
 
+        tracing::debug!(
+            batch = batch,
+            state = ?state,
+            "Loaded migration state from database."
+        );
+
         Ok(Self {
             state,
             batch,
@@ -40,6 +46,8 @@ impl Migrator {
     }
 
     pub fn register(&mut self, name: String, migration: Box<dyn Migration>) {
+        tracing::trace!("Registered migration [{name}]");
+
         self.migrations.insert(name, migration);
     }
 
@@ -67,6 +75,7 @@ impl Migrator {
     pub async fn run(mut self) -> Result<(), Error> {
         for (name, migration) in &self.migrations {
             if self.state.iter().any(|m| &m.migration == name) {
+                tracing::trace!("Skipping migration [{name}], since it's already been run.");
                 continue;
             }
 
@@ -106,6 +115,8 @@ impl Migrator {
                 batch: self.batch,
                 migration: name.to_string(),
             });
+
+            tracing::info!("Successfully ran migration [{name}].");
         }
 
         Ok(())
@@ -127,7 +138,7 @@ impl Migrator {
             let migration = self
                 .migrations
                 .get(&record.migration)
-                .ok_or(Error::NotFound(record.migration))?;
+                .ok_or_else(|| Error::NotFound(record.migration.clone()))?;
 
             self.connection
                 .exec("begin", vec![])
@@ -150,7 +161,7 @@ impl Migrator {
             self.connection
                 .exec(
                     "delete from migrations where id = ?",
-                    vec![to_value!(record.id)],
+                    vec![to_value!(&record.id)],
                 )
                 .await
                 .map_err(|e| Error::Database(e.to_string()))?;
@@ -159,6 +170,8 @@ impl Migrator {
                 .exec("commit", vec![])
                 .await
                 .map_err(|e| Error::Database(e.to_string()))?;
+
+            tracing::info!("Successfully rolled back migration [{}].", record.migration);
         }
 
         Ok(())
