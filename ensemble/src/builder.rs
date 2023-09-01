@@ -257,6 +257,11 @@ impl Builder {
 
         let model = M::default();
         for relation in self.eager_load {
+            tracing::trace!(
+                "Eager loading {relation} relation for {} models",
+                models.len()
+            );
+
             let rows = model
                 .eager_load(&relation, models.iter().collect::<Vec<&M>>().as_slice())
                 .get_rows()
@@ -312,16 +317,20 @@ impl Builder {
         let mut conn = connection::get().await?;
         let values: Vec<(String, Value)> = columns.into().0;
 
+        let (sql, bindings) = (
+            format!(
+                "INSERT INTO {} ({}) VALUES ({})",
+                self.table,
+                values.iter().map(|(column, _)| column).join(", "),
+                values.iter().map(|_| "?").join(", ")
+            ),
+            values.into_iter().map(|(_, value)| value).collect(),
+        );
+
+        tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Executing INSERT SQL query");
+
         let result = conn
-            .exec(
-                &format!(
-                    "INSERT INTO {} ({}) VALUES ({})",
-                    self.table,
-                    values.iter().map(|(column, _)| column).join(", "),
-                    values.iter().map(|_| "?").join(", ")
-                ),
-                values.into_iter().map(|(_, value)| value).collect(),
-            )
+            .exec(&sql, bindings)
             .await
             .map_err(|e| Error::Database(e.to_string()))?;
 
@@ -335,27 +344,31 @@ impl Builder {
     /// Returns an error if the query fails, or if a connection to the database cannot be established.
     pub async fn update<T: Into<Columns> + Send>(self, values: T) -> Result<u64, Error> {
         let mut conn = connection::get().await?;
-        let sql = self.to_sql(QueryType::Update);
         let values: Vec<(String, Value)> = values.into().0;
 
-        conn.exec(
-            &format!(
-                "UPDATE {} SET {} {sql}",
+        let (sql, bindings) = (
+            format!(
+                "UPDATE {} SET {} {}",
                 self.table,
                 values
                     .iter()
                     .map(|(column, _)| format!("{} = ?", column))
                     .join(", "),
+                self.to_sql(QueryType::Update)
             ),
             values
                 .iter()
                 .map(|(_, value)| value.clone())
                 .chain(self.get_bindings())
                 .collect(),
-        )
-        .await
-        .map_err(|e| Error::Database(e.to_string()))
-        .map(|r| r.rows_affected)
+        );
+
+        tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Executing UPDATE SQL query");
+
+        conn.exec(&sql, bindings)
+            .await
+            .map_err(|e| Error::Database(e.to_string()))
+            .map(|r| r.rows_affected)
     }
 
     /// Delete records from the database. Returns the number of affected rows.
@@ -365,8 +378,11 @@ impl Builder {
     /// Returns an error if the query fails, or if a connection to the database cannot be established.
     pub async fn delete(self) -> Result<u64, Error> {
         let mut conn = connection::get().await?;
+        let (sql, bindings) = (self.to_sql(QueryType::Delete), self.get_bindings());
 
-        conn.exec(&self.to_sql(QueryType::Delete), self.get_bindings())
+        tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Executing DELETE SQL query");
+
+        conn.exec(&sql, bindings)
             .await
             .map_err(|e| Error::Database(e.to_string()))
             .map(|r| r.rows_affected)
@@ -379,8 +395,11 @@ impl Builder {
     /// Returns an error if the query fails, or if a connection to the database cannot be established.
     pub async fn truncate(self) -> Result<u64, Error> {
         let mut conn = connection::get().await?;
+        let sql = format!("TRUNCATE TABLE {}", self.table);
 
-        conn.exec(&format!("TRUNCATE TABLE {}", self.table), vec![])
+        tracing::debug!(sql = sql.as_str(), "Executing TRUNCATE SQL query");
+
+        conn.exec(&sql, vec![])
             .await
             .map_err(|e| Error::Database(e.to_string()))
             .map(|r| r.rows_affected)
@@ -391,6 +410,8 @@ impl Builder {
     async fn _get(&self) -> Result<Vec<Value>, Error> {
         let mut conn = connection::get().await?;
         let (sql, bindings) = (self.to_sql(QueryType::Select), self.get_bindings());
+
+        tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Executing SELECT SQL query");
 
         let values = conn
             .get_values(&sql, bindings)

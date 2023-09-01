@@ -31,6 +31,12 @@ impl Migrator {
             .unwrap_or_default()
             .saturating_add(1);
 
+        tracing::debug!(
+            batch = batch,
+            state = ?state,
+            "Loaded migration state from database."
+        );
+
         Ok(Self {
             state,
             batch,
@@ -40,6 +46,8 @@ impl Migrator {
     }
 
     pub fn register(&mut self, name: String, migration: Box<dyn Migration>) {
+        tracing::trace!("Registered migration [{name}]");
+
         self.migrations.insert(name, migration);
     }
 
@@ -67,6 +75,7 @@ impl Migrator {
     pub async fn run(mut self) -> Result<(), Error> {
         for (name, migration) in &self.migrations {
             if self.state.iter().any(|m| &m.migration == name) {
+                tracing::trace!("Skipping migration [{name}], since it's already been run.");
                 continue;
             }
 
@@ -106,6 +115,8 @@ impl Migrator {
                 batch: self.batch,
                 migration: name.to_string(),
             });
+
+            tracing::info!("Successfully ran migration [{name}].");
         }
 
         Ok(())
@@ -127,7 +138,7 @@ impl Migrator {
             let migration = self
                 .migrations
                 .get(&record.migration)
-                .ok_or(Error::NotFound(record.migration))?;
+                .ok_or_else(|| Error::NotFound(record.migration.clone()))?;
 
             self.connection
                 .exec("begin", vec![])
@@ -150,7 +161,7 @@ impl Migrator {
             self.connection
                 .exec(
                     "delete from migrations where id = ?",
-                    vec![to_value!(record.id)],
+                    vec![to_value!(&record.id)],
                 )
                 .await
                 .map_err(|e| Error::Database(e.to_string()))?;
@@ -159,22 +170,21 @@ impl Migrator {
                 .exec("commit", vec![])
                 .await
                 .map_err(|e| Error::Database(e.to_string()))?;
+
+            tracing::info!("Successfully rolled back migration [{}].", record.migration);
         }
 
         Ok(())
     }
 
     async fn get_state(conn: &mut Connection) -> Result<Vec<StoredMigration>, Error> {
-        conn.exec(
-            "create table if not exists migrations (
-                id int unsigned not null auto_increment primary key,
-                migration varchar(255) not null,
-                batch int not null
-            )",
-            vec![],
-        )
-        .await
-        .map_err(|e| Error::Database(e.to_string()))?;
+        let sql = migrations_table_query();
+
+        tracing::debug!(sql = sql, "Running CREATE TABLE IF NOT EXISTS SQL query");
+
+        conn.exec(sql, vec![])
+            .await
+            .map_err(|e| Error::Database(e.to_string()))?;
 
         Ok(conn
             .get_values("select * from migrations", vec![])
@@ -191,4 +201,23 @@ pub struct StoredMigration {
     id: u64,
     batch: u64,
     migration: String,
+}
+
+fn migrations_table_query() -> &'static str {
+    #[cfg(feature = "mysql")]
+    return "create table if not exists migrations (
+        id int unsigned not null auto_increment primary key,
+        migration varchar(255) not null,
+        batch int not null
+    )";
+
+    #[cfg(feature = "postgres")]
+    return "create table if not exists migrations (
+        id serial primary key,
+        migration varchar(255) not null,
+        batch int not null
+    )";
+
+    #[cfg(all(not(feature = "mysql"), not(feature = "postgres")))]
+    panic!("either the `mysql` or `postgres` feature must be enabled to use migrations.");
 }

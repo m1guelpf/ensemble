@@ -35,6 +35,17 @@ pub async fn setup(database_url: &str) -> Result<(), SetupError> {
     let rb = RBatis::new();
 
     #[cfg(feature = "mysql")]
+    tracing::info!(
+        database_url = database_url,
+        "Setting up MySQL database pool..."
+    );
+    #[cfg(feature = "postgres")]
+    tracing::info!(
+        database_url = database_url,
+        "Setting up PostgreSQL database pool..."
+    );
+
+    #[cfg(feature = "mysql")]
     rb.link(MysqlDriver {}, database_url).await?;
     #[cfg(feature = "postgres")]
     rb.link(PgDriver {}, database_url).await?;
