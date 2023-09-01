@@ -227,8 +227,12 @@ impl Table {
             .nullable(true)
             .use_current(true);
 
-        self.timestamp("updated_at")
-            .nullable(true)
-            .use_current_on_update(true);
+        #[allow(unused_variables)]
+        let updated_at = self.timestamp("updated_at").nullable(true);
+
+        #[cfg(feature = "mysql")]
+        {
+            updated_at.use_current_on_update(true);
+        }
     }
 }

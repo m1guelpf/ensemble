@@ -83,6 +83,7 @@ pub struct Column {
     #[builder(type = Type::Timestamp)]
     use_current: bool,
     /// Set the TIMESTAMP column to use CURRENT_TIMESTAMP when updating
+    #[cfg(feature = "mysql")]
     #[builder(type = Type::Timestamp)]
     use_current_on_update: bool,
 
@@ -186,6 +187,7 @@ impl Column {
             sql.push_str(" DEFAULT now()");
         }
 
+        #[cfg(feature = "mysql")]
         if self.use_current_on_update {
             sql.push_str(" ON UPDATE CURRENT_TIMESTAMP");
         }

@@ -42,12 +42,12 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     let find_impl = impl_find(primary_key);
     let fresh_impl = impl_fresh(primary_key);
     let eager_load_impl = impl_eager_load(&fields);
+    let save_impl = impl_save(&fields, primary_key);
     let primary_key_impl = impl_primary_key(primary_key);
     let fill_relation_impl = impl_fill_relation(&fields);
     let serde_impl = serde::r#impl(&ast.ident, &fields)?;
     let default_impl = default::r#impl(&ast.ident, &fields)?;
-    let save_impl = impl_save(fields.should_validate(), primary_key);
-    let create_impl = impl_create(&ast.ident, &fields, primary_key)?;
+    let create_impl = impl_create(&ast.ident, &fields, primary_key);
     let relationships_impl = impl_relationships(&ast.ident, &fields)?;
     let table_name_impl = impl_table_name(&ast.ident.to_string(), opts.table_name);
 
@@ -166,18 +166,31 @@ fn impl_relationships(name: &Ident, fields: &Fields) -> syn::Result<TokenStream>
     })
 }
 
-fn impl_save(should_validate: bool, primary_key: &Field) -> TokenStream {
+fn impl_save(fields: &Fields, primary_key: &Field) -> TokenStream {
     let ident = &primary_key.ident;
-    let run_validation = if should_validate {
+    let run_validation = if fields.should_validate() {
         quote! {
             self.validate()?;
         }
     } else {
         TokenStream::new()
     };
+    let update_timestamp = fields
+        .fields
+        .iter()
+        .filter(|f| f.attr.default.updated_at)
+        .map(|field| {
+            let ident = &field.ident;
+
+            quote_spanned! {field.span() =>
+                self.#ident = ::ensemble::types::DateTime::now();
+            }
+        })
+        .collect::<TokenStream>();
 
     quote! {
         async fn save(&mut self) -> Result<(), ::ensemble::query::Error> {
+            #update_timestamp
             #run_validation
 
             let rows_affected = Self::query()
@@ -208,23 +221,27 @@ fn impl_find(primary_key: &Field) -> TokenStream {
     }
 }
 
-fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> syn::Result<TokenStream> {
-    let mut required = vec![];
+fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> TokenStream {
     let is_primary_u64 = (&primary_key.ty).into_token_stream().to_string() == "u64";
 
-    for field in &fields.fields {
-        if field.default(name, primary_key)?.is_some() {
-            continue;
-        }
+    let required = fields
+        .fields
+        .iter()
+        .filter(|f| {
+            f.default(name, primary_key)
+                .map(|o| o.is_none())
+                .unwrap_or(false)
+        })
+        .map(|field| {
+            let ty = &field.ty;
+            let ident = &field.ident;
 
-        let ty = &field.ty;
-        let ident = &field.ident;
-        required.push(quote_spanned! {field.span() =>
-            if self.#ident == <#ty>::default() {
-                return Err(::ensemble::query::Error::Required(stringify!(#ident)));
+            quote_spanned! {field.span() =>
+                if self.#ident == <#ty>::default() {
+                    return Err(::ensemble::query::Error::Required(stringify!(#ident)));
+                }
             }
         });
-    }
 
     let run_validation = if fields.should_validate() {
         quote! {
@@ -233,6 +250,18 @@ fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> syn::Resul
     } else {
         TokenStream::new()
     };
+
+    let update_timestamps = fields
+        .fields
+        .iter()
+        .filter(|f| f.attr.default.created_at || f.attr.default.updated_at)
+        .map(|field| {
+            let ident = &field.ident;
+
+            quote_spanned! {field.span() =>
+                self.#ident = ::ensemble::types::DateTime::now();
+            }
+        });
 
     let insert_and_return = if primary_key
         .attr
@@ -254,13 +283,14 @@ fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> syn::Resul
         }
     };
 
-    Ok(quote! {
+    quote! {
         async fn create(mut self) -> Result<Self, ::ensemble::query::Error> {
+            #(#update_timestamps)*
             #run_validation
             #(#required)*
             #insert_and_return
         }
-    })
+    }
 }
 
 fn impl_primary_key(primary_key: &Field) -> TokenStream {
