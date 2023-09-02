@@ -150,7 +150,11 @@ impl Column {
         }
 
         if let Some(default) = &self.default {
-            sql.push_str(&format!(" DEFAULT {default}"));
+            if self.r#type == Type::Json {
+                sql.push_str(&format!(" DEFAULT '{}'", default.as_str().unwrap()));
+            } else {
+                sql.push_str(&format!(" DEFAULT {}", default));
+            }
         }
 
         if self.uuid {
