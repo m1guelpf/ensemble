@@ -228,9 +228,9 @@ impl Migrator {
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StoredMigration {
-    id: u64,
-    batch: u64,
-    migration: String,
+    pub id: u64,
+    pub batch: u64,
+    pub migration: String,
 }
 
 fn migrations_table_query() -> &'static str {
