@@ -6,6 +6,7 @@ use serde::{
     },
     Serialize,
 };
+use std::collections::HashMap;
 
 use crate::Model;
 
@@ -29,12 +30,12 @@ impl serde::Serializer for Serializer {
     type Error = rbs::Error;
 
     type SerializeSeq = SerializeVec;
+    type SerializeMap = MapSerializer;
     type SerializeTuple = SerializeVec;
+    type SerializeStruct = StructSerializer;
     type SerializeTupleStruct = SerializeVec;
+    type SerializeStructVariant = StructSerializer;
     type SerializeTupleVariant = SerializeTupleVariant;
-    type SerializeMap = DefaultSerializeMap;
-    type SerializeStruct = DefaultSerializeMap;
-    type SerializeStructVariant = DefaultSerializeMap;
 
     #[inline]
     fn serialize_bool(self, val: bool) -> Result<Self::Ok, Self::Error> {
@@ -195,9 +196,9 @@ impl serde::Serializer for Serializer {
     }
 
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        let se = DefaultSerializeMap {
+        let se = MapSerializer {
             next_key: None,
-            map: Vec::with_capacity(len.unwrap_or(0)),
+            map: HashMap::with_capacity(len.unwrap_or(0)),
         };
         Ok(se)
     }
@@ -208,8 +209,7 @@ impl serde::Serializer for Serializer {
         _name: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
-        let se = DefaultSerializeMap {
-            next_key: None,
+        let se = StructSerializer {
             map: Vec::with_capacity(len),
         };
         Ok(se)
@@ -290,12 +290,12 @@ impl serde::ser::SerializeTupleVariant for SerializeTupleVariant {
     }
 }
 
-struct DefaultSerializeMap {
-    map: Vec<(Value, Value)>,
+struct MapSerializer {
+    map: HashMap<String, Value>,
     next_key: Option<Value>,
 }
 
-impl SerializeMap for DefaultSerializeMap {
+impl SerializeMap for MapSerializer {
     type Ok = Value;
     type Error = rbs::Error;
 
@@ -311,17 +311,32 @@ impl SerializeMap for DefaultSerializeMap {
             .take()
             .expect("`serialize_value` called before `serialize_key`");
 
-        self.map.push((key, value.serialize(Serializer)?));
-        Ok(())
+        if let Value::String(key) = key {
+            self.map.insert(key, value.serialize(Serializer)?);
+            Ok(())
+        } else {
+            Err(rbs::Error::Syntax(
+                "Ensemble only supports string keys.".to_string(),
+            ))
+        }
     }
 
     #[inline]
     fn end(self) -> Result<Value, Self::Error> {
-        Ok(Value::Map(ValueMap(self.map)))
+        Ok(Value::Ext(
+            "Json",
+            Box::new(Value::String(serde_json::to_string(&self.map).map_err(
+                |e| rbs::Error::Syntax(format!("Failed to serialize into JSON: {}", e)),
+            )?)),
+        ))
     }
 }
 
-impl SerializeStruct for DefaultSerializeMap {
+struct StructSerializer {
+    map: Vec<(Value, Value)>,
+}
+
+impl SerializeStruct for StructSerializer {
     type Ok = Value;
     type Error = rbs::Error;
 
@@ -344,7 +359,7 @@ impl SerializeStruct for DefaultSerializeMap {
     }
 }
 
-impl SerializeStructVariant for DefaultSerializeMap {
+impl SerializeStructVariant for StructSerializer {
     type Ok = Value;
     type Error = rbs::Error;
 
@@ -358,5 +373,114 @@ impl SerializeStructVariant for DefaultSerializeMap {
 
     fn end(self) -> Result<Value, Self::Error> {
         unreachable!("Ensemble does not support enums with values.")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::types::{DateTime, Hashed, Uuid};
+
+    use super::*;
+    use serde::{Deserialize, Serialize};
+    use serde_json::json;
+
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    struct Test {
+        a: i32,
+        b: String,
+        c: Vec<u8>,
+    }
+
+    #[test]
+    fn test_serialize() {
+        let test = Test {
+            a: 1,
+            b: "test".to_string(),
+            c: vec![1, 2, 3],
+        };
+
+        assert_eq!(
+            for_db(test).unwrap(),
+            rbs::to_value! {
+                "a" : 1,
+                "b" : "test",
+                "c" : [1u32, 2u32, 3u32],
+            }
+        );
+    }
+
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    enum Status {
+        Ok,
+        Error,
+        ThirdThing,
+    }
+
+    #[test]
+    fn test_serialize_enum() {
+        assert_eq!(for_db(Status::Ok).unwrap(), rbs::to_value!("Ok"));
+        assert_eq!(for_db(Status::Error).unwrap(), rbs::to_value!("Error"));
+        assert_eq!(
+            for_db(Status::ThirdThing).unwrap(),
+            rbs::to_value!("ThirdThing")
+        );
+    }
+
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    enum StatusV2 {
+        Ok,
+        Error,
+        ThirdThing,
+    }
+
+    #[test]
+    fn test_serialize_enum_with_custom_config() {
+        assert_eq!(for_db(StatusV2::Ok).unwrap(), rbs::to_value!("ok"));
+        assert_eq!(for_db(StatusV2::Error).unwrap(), rbs::to_value!("error"));
+        assert_eq!(
+            for_db(StatusV2::ThirdThing).unwrap(),
+            rbs::to_value!("third_thing")
+        );
+    }
+
+    #[test]
+    fn properly_serializes_datetime() {
+        let datetime = DateTime::now();
+
+        assert_eq!(
+            for_db(&datetime).unwrap(),
+            Value::Ext("DateTime", Box::new(rbs::to_value!(datetime.0)))
+        );
+    }
+
+    #[test]
+    fn properly_serializes_uuid() {
+        let uuid = Uuid::new();
+
+        assert_eq!(
+            for_db(&uuid).unwrap(),
+            Value::Ext("Uuid", Box::new(Value::String(uuid.to_string())))
+        );
+    }
+
+    #[test]
+    fn properly_serializes_hashed() {
+        let hashed = Hashed::new("hello-world");
+
+        assert_eq!(for_db(&hashed).unwrap(), Value::String(hashed.to_string()));
+    }
+
+    #[test]
+    fn properly_serializes_json() {
+        let json = json!({
+            "hello": "world",
+            "foo": "bar",
+        });
+
+        assert_eq!(
+            for_db(&json).unwrap(),
+            Value::Ext("Json", Box::new(Value::String(json.to_string())))
+        );
     }
 }
