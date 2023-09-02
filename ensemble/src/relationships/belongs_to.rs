@@ -3,7 +3,7 @@ use rbs::Value;
 use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug};
 
-use super::{find_related, Relationship};
+use super::{find_related, Relationship, Status};
 use crate::{builder::Builder, query::Error, Model};
 
 /// ## A Belongs To relationship.
@@ -36,7 +36,7 @@ use crate::{builder::Builder, query::Error, Model};
 #[derive(Clone, Default)]
 pub struct BelongsTo<Local: Model, Related: Model> {
     local_key: String,
-    relation: Option<Related>,
+    relation: Status<Related>,
     _local: std::marker::PhantomData<Local>,
     /// The value of the local model's related key.
     pub value: Related::PrimaryKey,
@@ -54,7 +54,7 @@ impl<Local: Model, Related: Model> Relationship for BelongsTo<Local, Related> {
         Self {
             value,
             local_key,
-            relation: None,
+            relation: Status::Initial,
             _local: std::marker::PhantomData,
         }
     }
@@ -84,7 +84,7 @@ impl<Local: Model, Related: Model> Relationship for BelongsTo<Local, Related> {
         if self.relation.is_none() {
             let relation = self.query().first().await?.ok_or(Error::NotFound)?;
 
-            self.relation = Some(relation);
+            self.relation = Status::Fetched(Some(relation));
         }
 
         Ok(self.relation.as_ref().unwrap())
@@ -93,7 +93,7 @@ impl<Local: Model, Related: Model> Relationship for BelongsTo<Local, Related> {
     fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
         let related = find_related(related, &self.local_key, &self.value, true)?;
 
-        self.relation = related.into_iter().next();
+        self.relation = Status::Fetched(related.into_iter().next());
 
         Ok(())
     }

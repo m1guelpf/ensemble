@@ -330,10 +330,7 @@ impl ser::SerializeMap for DefaultSerializeMap {
     type Error = rbs::Error;
 
     #[inline]
-    fn serialize_key<T: Serialize + ?Sized>(&mut self, key: &T) -> Result<(), Self::Error>
-    where
-        T:,
-    {
+    fn serialize_key<T: Serialize + ?Sized>(&mut self, key: &T) -> Result<(), Self::Error> {
         self.next_key = Some(fast_serialize(key)?);
         Ok(())
     }

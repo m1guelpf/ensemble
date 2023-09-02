@@ -3,7 +3,7 @@ use rbs::Value;
 use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug};
 
-use super::{find_related, Relationship};
+use super::{find_related, Relationship, Status};
 use crate::{builder::Builder, query::Error, value, Model};
 
 /// ## A One to Many relationship.
@@ -38,7 +38,7 @@ use crate::{builder::Builder, query::Error, value, Model};
 #[derive(Clone, Default)]
 pub struct HasMany<Local: Model, Related: Model> {
     foreign_key: String,
-    relation: Option<Vec<Related>>,
+    relation: Status<Vec<Related>>,
     /// The value of the local model's primary key.
     pub value: Local::PrimaryKey,
 }
@@ -57,7 +57,7 @@ impl<Local: Model, Related: Model> Relationship for HasMany<Local, Related> {
         Self {
             value,
             foreign_key,
-            relation: None,
+            relation: Status::Initial,
         }
     }
 
@@ -86,7 +86,7 @@ impl<Local: Model, Related: Model> Relationship for HasMany<Local, Related> {
         if self.relation.is_none() {
             let relation = self.query().get().await?;
 
-            self.relation = Some(relation);
+            self.relation = Status::Fetched(Some(relation));
         }
 
         Ok(self.relation.as_ref().unwrap())
@@ -96,7 +96,7 @@ impl<Local: Model, Related: Model> Relationship for HasMany<Local, Related> {
         let related = find_related(related, &self.foreign_key, &self.value, false)?;
 
         if !related.is_empty() {
-            self.relation = Some(related);
+            self.relation = Status::Fetched(Some(related));
         }
 
         Ok(())
@@ -137,7 +137,7 @@ impl<Local: Model, Related: Model> HasMany<Local, Related> {
     where
         Related: Clone,
     {
-        let Value::Map(mut value) = value::for_db(related)? else {
+        let Value::Map(mut value) = rbs::to_value(related)? else {
             return Err(Error::Serialization(rbs::Error::Syntax(
                 "Expected a map".to_string(),
             )));
@@ -148,9 +148,9 @@ impl<Local: Model, Related: Model> HasMany<Local, Related> {
             value::for_db(&self.value)?,
         );
 
-        let result = Related::create(value::from(Value::Map(value))?).await?;
+        let result = Related::create(rbs::from_value(Value::Map(value))?).await?;
 
-        if let Some(relation) = &mut self.relation {
+        if let Status::Fetched(Some(relation)) = &mut self.relation {
             relation.push(result.clone());
         }
 

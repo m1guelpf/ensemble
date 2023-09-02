@@ -7,6 +7,7 @@ mod has_many;
 mod has_one;
 
 use std::collections::HashMap;
+use std::ops::Deref;
 
 use crate::{builder::Builder, query::Error, value, Model};
 
@@ -57,6 +58,24 @@ pub trait Relationship {
     /// Create an instance of the relationship. Not intended to be used directly.
     #[doc(hidden)]
     fn build(value: Self::Key, related_key: Self::RelatedKey) -> Self;
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+enum Status<T> {
+    #[default]
+    Initial,
+    Fetched(Option<T>),
+}
+
+impl<T> Deref for Status<T> {
+    type Target = Option<T>;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Initial => &None,
+            Self::Fetched(value) => value,
+        }
+    }
 }
 
 fn find_related<M: Model, T: serde::Serialize>(

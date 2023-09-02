@@ -3,7 +3,7 @@ use rbs::Value;
 use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug};
 
-use super::{find_related, Relationship};
+use super::{find_related, Relationship, Status};
 use crate::{builder::Builder, query::Error, Model};
 
 /// ## A Many to Many relationship.
@@ -37,7 +37,7 @@ pub struct BelongsToMany<Local: Model, Related: Model> {
     local_key: String,
     foreign_key: String,
     pivot_table: String,
-    relation: Option<Vec<Related>>,
+    relation: Status<Vec<Related>>,
     _local: std::marker::PhantomData<Local>,
     /// The value of the local model's primary key.
     pub value: Related::PrimaryKey,
@@ -69,7 +69,7 @@ impl<Local: Model, Related: Model> Relationship for BelongsToMany<Local, Related
             local_key,
             foreign_key,
             pivot_table,
-            relation: None,
+            relation: Status::Initial,
             _local: std::marker::PhantomData,
         }
     }
@@ -111,7 +111,7 @@ impl<Local: Model, Related: Model> Relationship for BelongsToMany<Local, Related
         if self.relation.is_none() {
             let relation = self.query().get().await?;
 
-            self.relation = Some(relation);
+            self.relation = Status::Fetched(Some(relation));
         }
 
         Ok(self.relation.as_ref().unwrap())
@@ -121,7 +121,7 @@ impl<Local: Model, Related: Model> Relationship for BelongsToMany<Local, Related
         let related = find_related(related, &self.foreign_key, &self.value, false)?;
 
         if !related.is_empty() {
-            self.relation = Some(related);
+            self.relation = Status::Fetched(Some(related));
         }
 
         Ok(())

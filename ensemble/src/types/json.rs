@@ -10,6 +10,13 @@ use std::{
 #[repr(transparent)]
 pub struct Json<T: DeserializeOwned = Value>(pub T);
 
+#[allow(clippy::module_name_repetitions)]
+pub trait ToJson {
+    type Target: Serialize + DeserializeOwned;
+
+    fn to_json(self) -> Json<Self::Target>;
+}
+
 impl FromStr for Json {
     type Err = serde_json::Error;
 
@@ -21,6 +28,14 @@ impl FromStr for Json {
 impl From<Value> for Json {
     fn from(value: Value) -> Self {
         Self(value)
+    }
+}
+
+impl<T: Serialize + DeserializeOwned> ToJson for T {
+    type Target = T;
+
+    fn to_json(self) -> Json<T> {
+        Json(self)
     }
 }
 
