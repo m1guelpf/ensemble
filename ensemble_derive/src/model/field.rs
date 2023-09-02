@@ -126,6 +126,8 @@ impl Field {
             Some(
                 quote_spanned! { self.span() => <#relationship_ident<#name, #related>>::build(Default::default(), #foreign_key) },
             )
+        } else if self.ty.to_token_stream().to_string().starts_with("Option") {
+            Some(quote_spanned! { self.span() => None })
         } else {
             None
         })
