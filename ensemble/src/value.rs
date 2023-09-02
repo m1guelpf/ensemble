@@ -16,6 +16,24 @@ pub fn for_db<T: Serialize>(value: T) -> Result<Value, rbs::Error> {
     value.serialize(Serializer)
 }
 
+fn fast_serialize<T: Serialize>(mut value: T) -> Result<Value, rbs::Error> {
+    let type_name = std::any::type_name::<T>();
+    if type_name == std::any::type_name::<Value>() {
+        let addr = std::ptr::addr_of_mut!(value);
+        let v = unsafe { &mut *addr.cast() };
+        return Ok(std::mem::take(v));
+    }
+    if type_name == std::any::type_name::<&Value>() {
+        let addr = std::ptr::addr_of!(value);
+        return Ok(unsafe { *addr.cast::<&Value>() }.clone());
+    }
+    if type_name == std::any::type_name::<&&Value>() {
+        let addr = std::ptr::addr_of!(value);
+        return Ok(unsafe { **addr.cast::<&&Value>() }.clone());
+    }
+    value.serialize(Serializer)
+}
+
 struct Serializer;
 
 impl serde::Serializer for Serializer {
@@ -128,7 +146,7 @@ impl serde::Serializer for Serializer {
         name: &'static str,
         value: &T,
     ) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Ext(name, Box::new(value.serialize(self)?)))
+        Ok(Value::Ext(name, Box::new(fast_serialize(value)?)))
     }
 
     fn serialize_newtype_variant<T: Serialize + ?Sized>(
@@ -150,7 +168,7 @@ impl serde::Serializer for Serializer {
 
     #[inline]
     fn serialize_some<T: Serialize + ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error> {
-        value.serialize(self)
+        fast_serialize(value)
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
@@ -248,7 +266,7 @@ impl ser::SerializeSeq for SerializeVec {
 
     #[inline]
     fn serialize_element<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
-        self.vec.push(value.serialize(Serializer)?);
+        self.vec.push(fast_serialize(value)?);
         Ok(())
     }
 
@@ -294,7 +312,7 @@ impl ser::SerializeTupleVariant for SerializeTupleVariant {
 
     #[inline]
     fn serialize_field<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
-        self.vec.push(value.serialize(Serializer)?);
+        self.vec.push(fast_serialize(value)?);
         Ok(())
     }
 
@@ -316,7 +334,7 @@ impl ser::SerializeMap for DefaultSerializeMap {
     where
         T:,
     {
-        self.next_key = Some(key.serialize(Serializer)?);
+        self.next_key = Some(fast_serialize(key)?);
         Ok(())
     }
 
@@ -325,7 +343,7 @@ impl ser::SerializeMap for DefaultSerializeMap {
             .next_key
             .take()
             .expect("`serialize_value` called before `serialize_key`");
-        self.map.push((key, value.serialize(Serializer)?));
+        self.map.push((key, fast_serialize(value)?));
         Ok(())
     }
 
@@ -345,7 +363,7 @@ impl ser::SerializeStruct for DefaultSerializeMap {
         value: &T,
     ) -> Result<(), Self::Error> {
         self.map
-            .push((Value::String(key.to_string()), value.serialize(Serializer)?));
+            .push((Value::String(key.to_string()), fast_serialize(value)?));
         Ok(())
     }
 
@@ -364,7 +382,7 @@ impl ser::SerializeStructVariant for DefaultSerializeMap {
         value: &T,
     ) -> Result<(), Self::Error> {
         self.map
-            .push((Value::String(key.to_string()), value.serialize(Serializer)?));
+            .push((Value::String(key.to_string()), fast_serialize(value)?));
         Ok(())
     }
 
@@ -402,7 +420,7 @@ impl ser::SerializeStructVariant for SerializeStructVariant {
         _key: &'static str,
         value: &T,
     ) -> Result<(), Self::Error> {
-        self.vec.push(value.serialize(Serializer)?);
+        self.vec.push(fast_serialize(value)?);
         Ok(())
     }
 
