@@ -89,18 +89,18 @@ impl Field {
             let Type::Path(ty) = &self.ty else {
                 return Err(syn::Error::new_spanned(
                     self,
-                    "Field must be of type uuid::Uuid",
+                    "Field must be of type ensemble::types::Uuid",
                 ));
             };
 
             if ty.path.segments.last().unwrap().ident != "Uuid" {
                 return Err(syn::Error::new_spanned(
                     ty,
-                    "Field must be of type uuid::Uuid",
+                    "Field must be of type ensemble::types::Uuid",
                 ));
             }
 
-            Some(quote_spanned! { self.span() => <#ty>::new_v4() })
+            Some(quote_spanned! { self.span() => <#ty>::new() })
         } else if attrs.incrementing.unwrap_or(is_primary && is_u64) {
             Some(quote_spanned! { self.span() => 0 })
         } else if attrs.created_at || attrs.updated_at {

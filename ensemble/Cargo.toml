@@ -18,11 +18,12 @@ fastdate = "0.1.39"
 itertools = "0.11.0"
 Inflector = "0.11.4"
 thiserror = "1.0.44"
+serde_json = "1.0.105"
 async-trait = "0.1.73"
 schemars = { version = "0.8.13", optional = true }
 validator = { version = "0.16.1", optional = true }
-serde_json = { version = "1.0.105", optional = true }
 ensemble_derive = { version = "0", path = "../ensemble_derive" }
+uuid = { version = "1.4.1", features = ["serde", "v4"], optional = true }
 rbdc-pg = { version = "4.3.12", default-features = false, optional = true }
 rbdc-mysql = { version = "4.3.12", default-features = false, optional = true }
 rbatis = { version = "4.3.12", default-features = false, features = [
@@ -31,16 +32,15 @@ rbatis = { version = "4.3.12", default-features = false, features = [
 
 [dev-dependencies]
 axum = "0.6.20"
-uuid = { version = "1.4.1", features = ["serde"] }
-
 
 [features]
-default = ["native-tls", "json", "schema"]
+default = ["native-tls", "json", "schema", "uuid"]
 
 schema = ["dep:schemars"]
 mysql = ["dep:rbdc-mysql"]
 postgres = ["dep:rbdc-pg"]
-json = ["dep:serde_json", "ensemble_derive/json"]
+json = ["ensemble_derive/json"]
+uuid = ["dep:uuid", "schemars?/uuid1"]
 rustls = ["rbatis/tls-rustls", "rbdc-pg?/tls-rustls", "rbdc-mysql?/tls-rustls"]
 native-tls = [
     "rbatis/tls-native-tls",

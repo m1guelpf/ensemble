@@ -543,7 +543,6 @@ dependencies = [
  "serde",
  "serde_json",
  "trybuild",
- "uuid",
 ]
 
 [[package]]
@@ -1772,6 +1771,7 @@ dependencies = [
  "schemars_derive",
  "serde",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]

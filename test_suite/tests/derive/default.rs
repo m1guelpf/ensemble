@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 
-use ensemble::types::DateTime;
+use ensemble::types::{DateTime, Uuid};
 use ensemble::Model;
-use uuid::Uuid;
 
 #[test]
 fn automatically_implements_default_for_all_fields() {
