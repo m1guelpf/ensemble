@@ -4,6 +4,7 @@ use rbs::Value;
 use std::{fmt::Display, sync::mpsc};
 
 use super::Schemable;
+use crate::connection;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
@@ -114,7 +115,16 @@ impl Column {
     }
 
     pub(crate) fn to_sql(&self) -> String {
-        let mut sql = format!("{} {}", self.name, self.r#type);
+        let db_type = if connection::which_db().is_postgres()
+            && self.r#type == Type::BigInteger
+            && self.auto_increment
+        {
+            "bigserial".to_string()
+        } else {
+            self.r#type.to_string()
+        };
+
+        let mut sql = format!("{} {db_type}", self.name);
 
         #[cfg(feature = "mysql")]
         if self.unsigned {
@@ -162,9 +172,6 @@ impl Column {
         if self.auto_increment {
             #[cfg(feature = "mysql")]
             sql.push_str(" AUTO_INCREMENT");
-
-            #[cfg(feature = "postgres")]
-            sql.push_str(" SERIAL");
         }
 
         if let Some(index) = &self.index {

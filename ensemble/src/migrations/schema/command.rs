@@ -2,17 +2,14 @@ use std::{fmt::Display, sync::mpsc};
 
 use ensemble_derive::Column;
 
+use crate::connection::{self, Database};
+
 use super::Schemable;
 
 #[derive(Debug)]
 pub struct Command {
-    sql: String,
-}
-
-impl Command {
-    pub fn to_sql(&self) -> String {
-        self.sql.clone()
-    }
+    pub(crate) inline_sql: String,
+    pub(crate) post_sql: Option<String>,
 }
 
 #[derive(Debug, Clone, Column)]
@@ -20,6 +17,8 @@ impl Command {
 pub struct ForeignIndex {
     #[builder(init)]
     column: String,
+    #[builder(init)]
+    origin_table: String,
     name: Option<String>,
     #[builder(rename = "references")]
     foreign_column: Option<String>,
@@ -35,7 +34,7 @@ pub struct ForeignIndex {
 }
 
 impl ForeignIndex {
-    fn to_sql(&self) -> String {
+    fn to_sql(&self) -> (String, Option<String>) {
         let foreign_column = &self
             .foreign_column
             .as_ref()
@@ -46,9 +45,15 @@ impl ForeignIndex {
             ToString::to_string,
         );
 
-        let mut sql = format!(
-            "KEY {index_name} ({}), CONSTRAINT {index_name} FOREIGN KEY ({}) REFERENCES {}({foreign_column})", self.column, self.column, self.table,
-        );
+        let mut sql = match connection::which_db() {
+            Database::MySQL => format!(
+                "KEY {index_name} ({}), CONSTRAINT {index_name} FOREIGN KEY ({}) REFERENCES {}({foreign_column})", self.column, self.column, self.table,
+            ),
+            Database::PostgreSQL => format!(
+                "FOREIGN KEY ({}) REFERENCES {}({foreign_column})",
+                self.column, self.table,
+            )
+        };
 
         if let Some(on_delete) = &self.on_delete {
             sql.push_str(&format!(" ON DELETE {on_delete}"));
@@ -58,7 +63,16 @@ impl ForeignIndex {
             sql.push_str(&format!(" ON UPDATE {on_update}"));
         }
 
-        sql
+        match connection::which_db() {
+            Database::MySQL => (sql, None),
+            Database::PostgreSQL => (
+                sql,
+                Some(format!(
+                    "CREATE INDEX {index_name} ON {}({});",
+                    self.origin_table, self.column
+                )),
+            ),
+        }
     }
 }
 
@@ -67,8 +81,13 @@ impl ForeignIndex {
 impl Drop for ForeignIndex {
     fn drop(&mut self) {
         if let Some(tx) = self.tx.take() {
-            tx.send(Schemable::Command(Command { sql: self.to_sql() }))
-                .unwrap();
+            let (inline_sql, post_sql) = self.to_sql();
+
+            tx.send(Schemable::Command(Command {
+                inline_sql,
+                post_sql,
+            }))
+            .unwrap();
             drop(tx);
         }
     }

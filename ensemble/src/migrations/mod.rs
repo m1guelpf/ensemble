@@ -4,9 +4,11 @@ use std::fmt::Debug;
 use crate::connection::ConnectError;
 
 pub use migrator::Migrator;
+#[cfg(any(feature = "mysql", feature = "postgres"))]
 pub use schema::Schema;
 
 mod migrator;
+#[cfg(any(feature = "mysql", feature = "postgres"))]
 mod schema;
 
 #[derive(Debug, thiserror::Error)]

@@ -7,7 +7,6 @@ use self::{
     column::{Column, Type},
     command::{Command, ForeignIndex},
 };
-
 use super::{migrator::MIGRATE_CONN, Error};
 use crate::{connection, Model};
 
@@ -15,6 +14,7 @@ mod column;
 mod command;
 
 pub struct Schema {}
+
 pub enum Schemable {
     Column(Column),
     Command(Command),
@@ -31,23 +31,27 @@ impl Schema {
     where
         F: FnOnce(&mut Table) + Send,
     {
-        let (columns, commands) = Self::get_schema(callback)?;
+        let (columns, commands) = Self::get_schema(table_name.to_string(), callback)?;
         let mut conn_lock = MIGRATE_CONN.try_lock().map_err(|_| Error::Lock)?;
         let mut conn = conn_lock.take().ok_or(Error::Lock)?;
 
         let sql = format!(
-            "CREATE TABLE {} ({}) {}",
+            "CREATE TABLE {} ({}) {}; {}",
             table_name,
             columns
                 .iter()
                 .map(Column::to_sql)
-                .chain(commands.iter().map(Command::to_sql))
+                .chain(commands.iter().map(|cmd| cmd.inline_sql.clone()))
                 .join(", "),
-            if cfg!(feature = "mysql") {
+            if connection::which_db().is_mysql() {
                 "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
             } else {
                 ""
-            }
+            },
+            commands
+                .iter()
+                .filter_map(|cmd| cmd.post_sql.clone())
+                .join("\n")
         );
 
         tracing::debug!(sql = sql.as_str(), "Running CREATE TABLE SQL query");
@@ -80,12 +84,15 @@ impl Schema {
         Ok(())
     }
 
-    fn get_schema<F>(callback: F) -> Result<(Vec<Column>, Vec<Command>), Error>
+    fn get_schema<F>(table_name: String, callback: F) -> Result<(Vec<Column>, Vec<Command>), Error>
     where
         F: FnOnce(&mut Table),
     {
         let (tx, rx) = mpsc::channel();
-        let mut table = Table { sender: Some(tx) };
+        let mut table = Table {
+            name: table_name,
+            sender: Some(tx),
+        };
 
         let ret = std::thread::spawn(move || {
             let mut schema = vec![];
@@ -114,6 +121,7 @@ impl Schema {
 
 #[derive(Debug)]
 pub struct Table {
+    name: String,
     sender: Option<mpsc::Sender<Schemable>>,
 }
 
@@ -174,7 +182,7 @@ impl Table {
 
     /// Specify a foreign key for the table.
     pub fn foreign(&mut self, column: &str) -> ForeignIndex {
-        ForeignIndex::new(column.to_string(), self.sender.clone())
+        ForeignIndex::new(column.to_string(), self.name.clone(), self.sender.clone())
     }
 
     /// Create a new enum column on the table.
@@ -202,7 +210,7 @@ impl Table {
             Column::new(column.clone(), Type::String(255), self.sender.clone());
         }
 
-        let index = ForeignIndex::new(column, self.sender.clone());
+        let index = ForeignIndex::new(column, self.name.clone(), self.sender.clone());
         index.on(M::TABLE_NAME).references(M::PRIMARY_KEY)
     }
 
@@ -216,7 +224,7 @@ impl Table {
             column.unsigned(true);
         };
 
-        let index = ForeignIndex::new(name.to_string(), self.sender.clone());
+        let index = ForeignIndex::new(name.to_string(), self.name.clone(), self.sender.clone());
 
         // if the column name is of the form `resource_id`, we extract and set the table name and foreign column name
         if let Some((resource, column)) = name.split_once('_') {

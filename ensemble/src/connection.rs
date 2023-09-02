@@ -80,3 +80,32 @@ pub async fn get() -> Result<Connection, ConnectError> {
         Some(rb) => Ok(rb.get_pool()?.get().await?),
     }
 }
+
+#[cfg(any(feature = "mysql", feature = "postgres"))]
+pub enum Database {
+    MySQL,
+    PostgreSQL,
+}
+
+#[cfg(any(feature = "mysql", feature = "postgres"))]
+impl Database {
+    pub fn is_mysql(&self) -> bool {
+        matches!(self, Database::MySQL)
+    }
+
+    pub fn is_postgres(&self) -> bool {
+        matches!(self, Database::PostgreSQL)
+    }
+}
+
+#[cfg(any(feature = "mysql", feature = "postgres"))]
+pub const fn which_db() -> Database {
+    #[cfg(all(feature = "mysql", feature = "postgres"))]
+    panic!("Both the `mysql` and `postgres` features are enabled. Please enable only one of them.");
+
+    if cfg!(feature = "mysql") {
+        Database::MySQL
+    } else {
+        Database::PostgreSQL
+    }
+}
