@@ -255,7 +255,7 @@ fn visitor_deserialize(
                 }}
             }, |key| quote_spanned! {f.span()=> #key });
 
-        let foreign_key = f.foreign_key(*relationship_type, primary_key);
+        let foreign_key = f.foreign_key(*relationship_type, related);
 
         quote_spanned! {f.span()=> #ident: <#relationship_ident<#name, #related>>::build(#key_ident, #foreign_key) }
     });

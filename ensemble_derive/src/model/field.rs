@@ -111,7 +111,7 @@ impl Field {
             Some(quote_spanned! { self.span() => <#ty>::now() })
         } else if let Some((relationship_type, related, _)) = self.relationship(primary_key) {
             let relationship_ident = Ident::new(&relationship_type.to_string(), self.span());
-            let foreign_key = self.foreign_key(relationship_type, primary_key);
+            let foreign_key = self.foreign_key(relationship_type, &related);
 
             if self.attr.column == Some(self.ident.to_string()) {
                 return Err(syn::Error::new_spanned(
@@ -131,7 +131,7 @@ impl Field {
     pub(crate) fn foreign_key(
         &self,
         relationship_type: Relationship,
-        primary_key: &Self,
+        related: &Ident,
     ) -> TokenStream {
         match relationship_type {
             Relationship::BelongsToMany => {
@@ -142,8 +142,7 @@ impl Field {
                 quote_spanned! {self.span()=> (#pivot_table, #foreign_key, #local_key) }
             }
             Relationship::BelongsTo => {
-                let primary_key = &primary_key.ident;
-                quote_spanned! {self.span()=> Some(stringify!(#primary_key).to_string()) }
+                quote_spanned! {self.span()=> Some(#related::PRIMARY_KEY.to_string()) }
             }
             _ => wrap_option(self.attr.foreign_key.clone()),
         }
