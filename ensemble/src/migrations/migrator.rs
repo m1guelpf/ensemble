@@ -109,6 +109,8 @@ impl Migrator {
                     .await
                     .map_err(|e| Error::Database(e.to_string()))?;
 
+                tracing::debug!("Rolled back changes for migration [{name}].");
+
                 return Err(e);
             }
 
@@ -167,13 +169,24 @@ impl Migrator {
                 .map_err(|_| Error::Lock)?
                 .replace(self.connection);
 
-            migration.down().await?;
+            let migration_result = migration.down().await;
 
             self.connection = MIGRATE_CONN
                 .try_lock()
                 .map_err(|_| Error::Lock)?
                 .take()
                 .ok_or(Error::Lock)?;
+
+            if let Err(e) = migration_result {
+                self.connection
+                    .exec("rollback", vec![])
+                    .await
+                    .map_err(|e| Error::Database(e.to_string()))?;
+
+                tracing::debug!("Re-applied changes for migration [{name}].");
+
+                return Err(e);
+            }
 
             self.connection
                 .exec(
