@@ -3,10 +3,10 @@ use std::fmt::Debug;
 
 use crate::connection::ConnectError;
 
-pub use migrator::Migrator;
 #[cfg(any(feature = "mysql", feature = "postgres"))]
-pub use schema::Schema;
+pub use {migrator::Migrator, schema::Schema};
 
+#[cfg(any(feature = "mysql", feature = "postgres"))]
 mod migrator;
 #[cfg(any(feature = "mysql", feature = "postgres"))]
 mod schema;

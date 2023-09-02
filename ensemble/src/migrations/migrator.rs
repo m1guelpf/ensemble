@@ -79,6 +79,8 @@ impl Migrator {
                 continue;
             }
 
+            tracing::trace!("Running migration [{name}].");
+
             self.connection
                 .exec("begin", vec![])
                 .await
@@ -204,20 +206,22 @@ pub struct StoredMigration {
 }
 
 fn migrations_table_query() -> &'static str {
-    #[cfg(feature = "mysql")]
-    return "create table if not exists migrations (
-        id int unsigned not null auto_increment primary key,
-        migration varchar(255) not null,
-        batch int not null
-    )";
+    use crate::connection::Database;
 
-    #[cfg(feature = "postgres")]
-    return "create table if not exists migrations (
-        id serial primary key,
-        migration varchar(255) not null,
-        batch int not null
-    )";
-
-    #[cfg(all(not(feature = "mysql"), not(feature = "postgres")))]
-    panic!("either the `mysql` or `postgres` feature must be enabled to use migrations.");
+    match connection::which_db() {
+        Database::MySQL => {
+            "create table if not exists migrations (
+            id int unsigned not null auto_increment primary key,
+            migration varchar(255) not null,
+            batch int not null
+        )"
+        }
+        Database::PostgreSQL => {
+            "create table if not exists migrations (
+            id serial primary key,
+            migration varchar(255) not null,
+            batch int not null
+        )"
+        }
+    }
 }
