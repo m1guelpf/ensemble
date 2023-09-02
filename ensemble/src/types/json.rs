@@ -18,6 +18,12 @@ impl FromStr for Json {
     }
 }
 
+impl From<Value> for Json {
+    fn from(value: Value) -> Self {
+        Self(value)
+    }
+}
+
 impl<T: Serialize + DeserializeOwned> Serialize for Json<T> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::Error;
