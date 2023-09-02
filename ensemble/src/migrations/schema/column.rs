@@ -166,7 +166,7 @@ impl Column {
             sql.push_str(" DEFAULT (UUID())");
 
             #[cfg(feature = "postgres")]
-            sql.push_str(" DEFAULT (uuid_generate_v4())");
+            sql.push_str(" DEFAULT (gen_random_uuid())");
         }
 
         if self.auto_increment {
