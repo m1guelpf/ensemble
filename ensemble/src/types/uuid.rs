@@ -8,6 +8,7 @@ use rbs::Value;
 use serde::Deserializer;
 
 #[derive(serde::Serialize, Clone, Eq, PartialEq, Hash, Default)]
+#[repr(transparent)]
 pub struct Uuid(uuid::Uuid);
 
 impl<'de> serde::Deserialize<'de> for Uuid {

@@ -219,7 +219,8 @@ fn visitor_deserialize(
             return None;
         }
 
-        Some(quote_spanned! {f.span()=> let #ident = #ident.ok_or_else(|| _serde::de::Error::missing_field(stringify!(#column)))?; })
+        let ty = &f.ty;
+        Some(quote_spanned! {f.span()=> let #ident: #ty = #ident.ok_or_else(|| _serde::de::Error::missing_field(stringify!(#column)))?; })
     });
 
     let ensure_no_leftovers = if needs_collect {
@@ -236,7 +237,11 @@ fn visitor_deserialize(
         let ident = &f.ident;
 
         let Some((relationship_type, related, (relationship_key, relationship_expr))) = &f.relationship(primary_key) else {
-            return quote_spanned! {f.span()=> #ident: #ident };
+            return if f.attr.used_in_relationship {
+                quote_spanned! {f.span()=> #ident: #ident.clone() }
+            } else {
+                quote_spanned! {f.span()=> #ident: #ident }
+            }
         };
 
         let relationship_ident = Ident::new(&relationship_type.to_string(), f.span());
@@ -285,6 +290,7 @@ fn visitor_deserialize(
     };
 
     Ok(quote! {
+        #[allow(clippy::clone_on_copy)]
         impl<'de> _serde::de::Visitor<'de> for #visitor_name {
             type Value = #name;
 

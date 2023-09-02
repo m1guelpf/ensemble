@@ -108,7 +108,7 @@ fn impl_eager_load(fields: &Fields) -> TokenStream {
         let ident = &field.ident;
 
         quote_spanned! {field.span() =>
-            stringify!(#ident) => self.#ident.eager_query(related.iter().map(|model| model.#ident.value).collect()),
+            stringify!(#ident) => self.#ident.eager_query(related.iter().map(|model| &model.#ident.value).cloned().collect()),
         }
     });
 
