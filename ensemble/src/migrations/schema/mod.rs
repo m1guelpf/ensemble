@@ -55,15 +55,15 @@ impl Schema {
         );
 
         tracing::debug!(sql = sql.as_str(), "Running CREATE TABLE SQL query");
-
-        conn.exec(&sql, vec![])
-            .await
-            .map_err(|e| Error::Database(e.to_string()))?;
+        let query_result = conn.exec(&sql, vec![]).await;
 
         conn_lock.replace(conn);
         drop(conn_lock);
 
-        Ok(())
+        match query_result {
+            Ok(_) => Ok(()),
+            Err(e) => Err(Error::Database(e.to_string())),
+        }
     }
 
     /// Drops a table.
@@ -72,16 +72,21 @@ impl Schema {
     ///
     /// Returns an error if the table cannot be dropped, or if a connection to the database cannot be established.
     pub async fn drop(table_name: &str) -> Result<(), Error> {
-        let mut conn = connection::get().await?;
+        let mut conn_lock = MIGRATE_CONN.try_lock().map_err(|_| Error::Lock)?;
+        let mut conn = conn_lock.take().ok_or(Error::Lock)?;
+
         let (sql, bindings) = (format!("DROP TABLE ?"), vec![to_value!(table_name)]);
 
         tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Running DROP TABLE SQL query");
+        let query_result = conn.exec(&sql, bindings).await;
 
-        conn.exec(&sql, bindings)
-            .await
-            .map_err(|e| Error::Database(e.to_string()))?;
+        conn_lock.replace(conn);
+        drop(conn_lock);
 
-        Ok(())
+        match query_result {
+            Ok(_) => Ok(()),
+            Err(e) => Err(Error::Database(e.to_string())),
+        }
     }
 
     fn get_schema<F>(table_name: String, callback: F) -> Result<(Vec<Column>, Vec<Command>), Error>

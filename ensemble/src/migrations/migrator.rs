@@ -95,13 +95,22 @@ impl Migrator {
                 .map_err(|_| Error::Lock)?
                 .replace(self.connection);
 
-            migration.up().await?;
+            let migration_result = migration.up().await;
 
             self.connection = MIGRATE_CONN
                 .try_lock()
                 .map_err(|_| Error::Lock)?
                 .take()
                 .ok_or(Error::Lock)?;
+
+            if let Err(e) = migration_result {
+                self.connection
+                    .exec("rollback", vec![])
+                    .await
+                    .map_err(|e| Error::Database(e.to_string()))?;
+
+                return Err(e);
+            }
 
             self.connection
                 .exec(
@@ -217,17 +226,17 @@ fn migrations_table_query() -> &'static str {
     match connection::which_db() {
         Database::MySQL => {
             "create table if not exists migrations (
-            id int unsigned not null auto_increment primary key,
-            migration varchar(255) not null,
-            batch int not null
-        )"
+                id int unsigned not null auto_increment primary key,
+                migration varchar(255) not null unique,
+                batch int not null
+            )"
         }
         Database::PostgreSQL => {
             "create table if not exists migrations (
-            id serial primary key,
-            migration varchar(255) not null,
-            batch int not null
-        )"
+                id serial primary key,
+                migration varchar(255) not null unique,
+                batch int not null
+            )"
         }
     }
 }
