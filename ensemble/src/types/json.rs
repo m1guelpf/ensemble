@@ -1,4 +1,5 @@
 use rbs::Value;
+use schemars::JsonSchema;
 use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize};
 use std::{
     ops::{Deref, DerefMut},
@@ -75,5 +76,16 @@ impl<T: Serialize + DeserializeOwned> Deref for Json<T> {
 impl<T: Serialize + DeserializeOwned> DerefMut for Json<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+#[cfg(feature = "schema")]
+impl<T: Serialize + DeserializeOwned + JsonSchema> schemars::JsonSchema for Json<T> {
+    fn schema_name() -> String {
+        T::schema_name()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        T::json_schema(gen)
     }
 }
