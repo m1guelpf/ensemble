@@ -234,6 +234,19 @@ impl Table {
         }
     }
 
+    /// Create a foreign UUID column for the given model.
+    pub fn foreign_uuid(&mut self, name: &str) -> ForeignIndex {
+        Column::new(name.to_string(), Type::Uuid, self.sender.clone()).uuid(true);
+        let index = ForeignIndex::new(name.to_string(), self.name.clone(), self.sender.clone());
+
+        // if the column name is of the form `resource_id`, we extract and set the table name and foreign column name
+        if let Some((resource, column)) = name.split_once('_') {
+            index.on(&resource.to_plural()).references(column)
+        } else {
+            index
+        }
+    }
+
     /// Add nullable creation and update timestamps to the table.
     pub fn timestamps(&mut self) {
         self.timestamp("created_at")
