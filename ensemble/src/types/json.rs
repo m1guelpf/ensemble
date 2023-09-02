@@ -1,6 +1,6 @@
-use rbs::Value;
 use schemars::JsonSchema;
 use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use std::{
     ops::{Deref, DerefMut},
     str::FromStr,
@@ -8,7 +8,7 @@ use std::{
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 #[repr(transparent)]
-pub struct Json<T: DeserializeOwned = serde_json::Value>(pub T);
+pub struct Json<T: DeserializeOwned = Value>(pub T);
 
 impl FromStr for Json {
     type Err = serde_json::Error;
@@ -19,10 +19,7 @@ impl FromStr for Json {
 }
 
 impl<T: Serialize + DeserializeOwned> Serialize for Json<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::Error;
         if std::any::type_name::<S::Error>() == std::any::type_name::<rbs::Error>() {
             serializer.serialize_newtype_struct(
@@ -36,21 +33,18 @@ impl<T: Serialize + DeserializeOwned> Serialize for Json<T> {
 }
 
 impl<'de, T: Serialize + DeserializeOwned> Deserialize<'de> for Json<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         use serde::de::Error;
         if std::any::type_name::<D::Error>() == std::any::type_name::<rbs::Error>() {
-            let mut v = Value::deserialize(deserializer)?;
-            if let Value::Ext(_ty, buf) = v {
+            let mut v = rbs::Value::deserialize(deserializer)?;
+            if let rbs::Value::Ext(_ty, buf) = v {
                 v = *buf;
             }
 
             let js;
-            if let Value::Binary(buf) = v {
+            if let rbs::Value::Binary(buf) = v {
                 js = String::from_utf8(buf).map_err(|e| Error::custom(e.to_string()))?;
-            } else if let Value::String(buf) = v {
+            } else if let rbs::Value::String(buf) = v {
                 js = buf;
             } else {
                 js = v.to_string();
@@ -76,6 +70,12 @@ impl<T: Serialize + DeserializeOwned> Deref for Json<T> {
 impl<T: Serialize + DeserializeOwned> DerefMut for Json<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl<T: Serialize + DeserializeOwned + Default> Default for Json<T> {
+    fn default() -> Self {
+        Self(T::default())
     }
 }
 
