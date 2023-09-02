@@ -1,13 +1,10 @@
 use std::collections::HashMap;
 
-use rbs::from_value;
+use rbs::{from_value, to_value};
 use tokio::sync::Mutex;
 
 use super::{Error, Migration};
-use crate::{
-    connection::{self, Connection},
-    value::to_value,
-};
+use crate::connection::{self, Connection};
 
 pub static MIGRATE_CONN: Mutex<Option<Connection>> = Mutex::const_new(None);
 
@@ -120,7 +117,7 @@ impl Migrator {
             self.connection
                 .exec(
                     "insert into migrations (migration, batch) values (?, ?)",
-                    vec![to_value(&name), to_value(&self.batch)],
+                    vec![to_value!(&name), to_value!(&self.batch)],
                 )
                 .await
                 .map_err(|e| Error::Database(e.to_string()))?;
@@ -194,7 +191,7 @@ impl Migrator {
             self.connection
                 .exec(
                     "delete from migrations where id = ?",
-                    vec![to_value(&record.id)],
+                    vec![to_value!(&record.id)],
                 )
                 .await
                 .map_err(|e| Error::Database(e.to_string()))?;

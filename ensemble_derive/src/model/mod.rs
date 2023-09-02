@@ -195,7 +195,7 @@ fn impl_save(fields: &Fields, primary_key: &Field) -> TokenStream {
 
             let rows_affected = Self::query()
                 .r#where(Self::PRIMARY_KEY, "=", &self.#ident)
-                .update(::ensemble::value::to_value(self))
+                .update(::ensemble::rbs::to_value!(self))
                 .await?;
 
             if rows_affected != 1 {
@@ -213,7 +213,7 @@ fn impl_find(primary_key: &Field) -> TokenStream {
     quote! {
         async fn find(#ident: Self::PrimaryKey) -> Result<Self, ::ensemble::query::Error> {
             Self::query()
-                .r#where(Self::PRIMARY_KEY, "=", ::ensemble::value::to_value(#ident))
+                .r#where(Self::PRIMARY_KEY, "=", ::ensemble::rbs::to_value!(#ident))
                 .first()
                 .await?
                 .ok_or(::ensemble::query::Error::NotFound)

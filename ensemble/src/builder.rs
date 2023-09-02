@@ -1,17 +1,12 @@
 use itertools::Itertools;
-use rbs::Value;
+use rbs::{to_value, Value};
 use serde::Serialize;
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
 };
 
-use crate::{
-    connection,
-    query::Error,
-    value::{self, to_value},
-    Model,
-};
+use crate::{connection, query::Error, value, Model};
 
 /// The Query Builder.
 #[derive(Debug)]
@@ -54,7 +49,7 @@ impl Builder {
             boolean: Boolean::And,
             operator: operator.into(),
             column: column.to_string(),
-            value: Some(to_value(value)),
+            value: Some(to_value!(value)),
         }));
 
         self
@@ -475,7 +470,7 @@ impl<T: Serialize> From<Vec<(&str, T)>> for Columns {
         Self(
             values
                 .iter()
-                .map(|(column, value)| ((*column).to_string(), to_value(value)))
+                .map(|(column, value)| ((*column).to_string(), to_value!(value)))
                 .collect(),
         )
     }
@@ -485,7 +480,7 @@ impl<T: Serialize> From<&[(&str, T)]> for Columns {
         Self(
             values
                 .iter()
-                .map(|(column, value)| ((*column).to_string(), to_value(value)))
+                .map(|(column, value)| ((*column).to_string(), to_value!(value)))
                 .collect(),
         )
     }

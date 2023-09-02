@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
-use ensemble::rbs::{self, value_map};
-use ensemble::value::to_value;
+use ensemble::rbs::{self, to_value, value_map};
 use ensemble::Model;
 use serde_json::json;
 
@@ -69,7 +68,7 @@ fn hidden_fields_are_still_preserved_on_database() {
     };
 
     assert_eq!(
-        to_value(model),
+        to_value!(model),
         rbs::Value::Map(value_map! {
             "id" : 123u32,
             "name" : "JSON Test",
