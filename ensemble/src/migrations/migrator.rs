@@ -12,7 +12,7 @@ pub struct Migrator {
     batch: u64,
     connection: Connection,
     state: Vec<StoredMigration>,
-    migrations: HashMap<String, Box<dyn Migration>>,
+    migrations: Vec<(String, Box<dyn Migration>)>,
 }
 
 impl Migrator {
@@ -41,14 +41,18 @@ impl Migrator {
             state,
             batch,
             connection: conn,
-            migrations: HashMap::new(),
+            migrations: Vec::new(),
         })
     }
 
     pub fn register(&mut self, name: String, migration: Box<dyn Migration>) {
         tracing::trace!("Registered migration [{name}]");
 
-        self.migrations.insert(name, migration);
+        if self.migrations.iter().any(|(n, _)| n == &name) {
+            panic!("A migration with the name [{name}] has already been registered.");
+        }
+
+        self.migrations.push((name, migration));
     }
 
     /// Returns a list of migrations that have been run.
@@ -62,7 +66,7 @@ impl Migrator {
     pub fn pending(&self) -> HashMap<&str, &dyn Migration> {
         self.migrations
             .iter()
-            .filter(|(name, _)| !self.state.iter().any(|m| &&m.migration == name))
+            .filter(|(name, _)| !self.state.iter().any(|m| &m.migration == name))
             .map(|(name, migration)| (name.as_str(), migration.as_ref()))
             .collect()
     }
@@ -137,9 +141,11 @@ impl Migrator {
             .rev();
 
         for record in migrations {
-            let migration = self
+            let (name, migration) = self
                 .migrations
-                .get(&record.migration)
+                .iter()
+                .filter(|(name, _)| name == &record.migration)
+                .next()
                 .ok_or_else(|| Error::NotFound(record.migration.clone()))?;
 
             self.connection
@@ -173,7 +179,7 @@ impl Migrator {
                 .await
                 .map_err(|e| Error::Database(e.to_string()))?;
 
-            tracing::info!("Successfully rolled back migration [{}].", record.migration);
+            tracing::info!("Successfully rolled back migration [{name}].");
         }
 
         Ok(())
