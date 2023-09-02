@@ -33,8 +33,8 @@ impl serde::Serializer for Serializer {
     type SerializeTuple = SerializeVec;
     type SerializeStruct = StructSerializer;
     type SerializeTupleStruct = SerializeVec;
-    type SerializeStructVariant = StructSerializer;
     type SerializeTupleVariant = SerializeTupleVariant;
+    type SerializeStructVariant = StructVariantSerializer;
 
     #[inline]
     fn serialize_bool(self, val: bool) -> Result<Self::Ok, Self::Error> {
@@ -166,32 +166,30 @@ impl serde::Serializer for Serializer {
         Ok(se)
     }
 
-    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-        Err(rbs::Error::Syntax(
-            "Ensemble does not support tuples here.".to_string(),
-        ))
+    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
+        self.serialize_seq(Some(len))
     }
 
     fn serialize_tuple_struct(
         self,
-        name: &'static str,
-        _len: usize,
+        _name: &'static str,
+        len: usize,
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        Err(rbs::Error::Syntax(format!(
-            "Ensemble does not support structs here: {name}"
-        )))
+        self.serialize_tuple(len)
     }
 
     fn serialize_tuple_variant(
         self,
-        name: &'static str,
-        _idx: u32,
-        variant: &'static str,
-        _len: usize,
+        _name: &'static str,
+        idx: u32,
+        _variant: &'static str,
+        len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        Err(rbs::Error::Syntax(format!(
-            "Ensemble does not support enums with values: {name}::{variant}",
-        )))
+        let se = SerializeTupleVariant {
+            idx,
+            vec: Vec::with_capacity(len),
+        };
+        Ok(se)
     }
 
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
@@ -217,14 +215,16 @@ impl serde::Serializer for Serializer {
     #[inline]
     fn serialize_struct_variant(
         self,
-        name: &'static str,
-        _idx: u32,
-        variant: &'static str,
-        _len: usize,
+        _name: &'static str,
+        idx: u32,
+        _variant: &'static str,
+        len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        Err(rbs::Error::Syntax(format!(
-            "Ensemble does not support enums with values: {name}::{variant}",
-        )))
+        let se = StructVariantSerializer {
+            idx,
+            vec: Vec::with_capacity(len),
+        };
+        Ok(se)
     }
 }
 
@@ -252,40 +252,50 @@ impl SerializeTuple for SerializeVec {
     type Ok = Value;
     type Error = rbs::Error;
 
-    fn serialize_element<T: Serialize + ?Sized>(&mut self, _value: &T) -> Result<(), Self::Error> {
-        unreachable!("Ensemble does not support tuples here.")
+    #[inline]
+    fn serialize_element<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
+        SerializeSeq::serialize_element(self, value)
     }
 
+    #[inline]
     fn end(self) -> Result<Value, Self::Error> {
-        unreachable!("Ensemble does not support tuples here.")
+        SerializeSeq::end(self)
     }
 }
 
 impl SerializeTupleStruct for SerializeVec {
     type Ok = Value;
     type Error = rbs::Error;
-
-    fn serialize_field<T: Serialize + ?Sized>(&mut self, _value: &T) -> Result<(), Self::Error> {
-        unreachable!("Ensemble does not support structs here.")
+    #[inline]
+    fn serialize_field<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
+        SerializeSeq::serialize_element(self, value)
     }
 
+    #[inline]
     fn end(self) -> Result<Value, Self::Error> {
-        unreachable!("Ensemble does not support structs here.")
+        SerializeSeq::end(self)
     }
 }
 
-struct SerializeTupleVariant {}
+struct SerializeTupleVariant {
+    idx: u32,
+    vec: Vec<Value>,
+}
 
 impl serde::ser::SerializeTupleVariant for SerializeTupleVariant {
     type Ok = Value;
     type Error = rbs::Error;
 
-    fn serialize_field<T: Serialize + ?Sized>(&mut self, _value: &T) -> Result<(), Self::Error> {
-        unreachable!("Ensemble does not support enums with values.")
+    fn serialize_field<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
+        self.vec.push(value.serialize(Serializer)?);
+        Ok(())
     }
 
     fn end(self) -> Result<Value, Self::Error> {
-        unreachable!("Ensemble does not support enums with values.")
+        Ok(Value::Array(vec![
+            Value::from(self.idx),
+            Value::Array(self.vec),
+        ]))
     }
 }
 
@@ -347,20 +357,29 @@ impl SerializeStruct for StructSerializer {
     }
 }
 
-impl SerializeStructVariant for StructSerializer {
+pub struct StructVariantSerializer {
+    idx: u32,
+    vec: Vec<Value>,
+}
+
+impl SerializeStructVariant for StructVariantSerializer {
     type Ok = Value;
     type Error = rbs::Error;
 
     fn serialize_field<T: Serialize + ?Sized>(
         &mut self,
         _key: &'static str,
-        _value: &T,
+        value: &T,
     ) -> Result<(), Self::Error> {
-        unreachable!("Ensemble does not support enums with values.")
+        self.vec.push(value.serialize(Serializer)?);
+        Ok(())
     }
 
     fn end(self) -> Result<Value, Self::Error> {
-        unreachable!("Ensemble does not support enums with values.")
+        Ok(Value::Array(vec![
+            Value::from(self.idx),
+            Value::Array(self.vec),
+        ]))
     }
 }
 
