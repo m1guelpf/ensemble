@@ -194,10 +194,12 @@ impl serde::Serializer for Serializer {
         )))
     }
 
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        Err(rbs::Error::Syntax(
-            "Ensemble does not support maps here.".to_string(),
-        ))
+    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+        let se = DefaultSerializeMap {
+            next_key: None,
+            map: Vec::with_capacity(len.unwrap_or(0)),
+        };
+        Ok(se)
     }
 
     #[inline]
@@ -207,6 +209,7 @@ impl serde::Serializer for Serializer {
         len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
         let se = DefaultSerializeMap {
+            next_key: None,
             map: Vec::with_capacity(len),
         };
         Ok(se)
@@ -289,22 +292,32 @@ impl serde::ser::SerializeTupleVariant for SerializeTupleVariant {
 
 struct DefaultSerializeMap {
     map: Vec<(Value, Value)>,
+    next_key: Option<Value>,
 }
 
 impl SerializeMap for DefaultSerializeMap {
     type Ok = Value;
     type Error = rbs::Error;
 
-    fn serialize_key<T: Serialize + ?Sized>(&mut self, _key: &T) -> Result<(), Self::Error> {
-        unreachable!("Ensemble does not support maps here.")
+    #[inline]
+    fn serialize_key<T: Serialize + ?Sized>(&mut self, key: &T) -> Result<(), Self::Error> {
+        self.next_key = Some(key.serialize(Serializer)?);
+        Ok(())
     }
 
-    fn serialize_value<T: Serialize + ?Sized>(&mut self, _value: &T) -> Result<(), Self::Error> {
-        unreachable!("Ensemble does not support maps here.")
+    fn serialize_value<T: Serialize + ?Sized>(&mut self, value: &T) -> Result<(), Self::Error> {
+        let key = self
+            .next_key
+            .take()
+            .expect("`serialize_value` called before `serialize_key`");
+
+        self.map.push((key, value.serialize(Serializer)?));
+        Ok(())
     }
 
+    #[inline]
     fn end(self) -> Result<Value, Self::Error> {
-        unreachable!("Ensemble does not support maps here.")
+        Ok(Value::Map(ValueMap(self.map)))
     }
 }
 
