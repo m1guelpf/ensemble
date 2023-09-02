@@ -41,7 +41,7 @@ impl ForeignIndex {
             .expect("failed to build index: foreign column must be specified");
 
         let index_name = self.name.as_ref().map_or_else(
-            || format!("{}_{}_foreign", self.table, self.column),
+            || format!("{}_{}_foreign", self.origin_table, self.column),
             ToString::to_string,
         );
 
