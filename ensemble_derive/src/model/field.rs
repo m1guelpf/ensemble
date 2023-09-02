@@ -7,7 +7,7 @@ use syn::{spanned::Spanned, FieldsNamed, GenericArgument, PathArguments, Type};
 
 use crate::Relationship;
 
-use super::default;
+use super::default::{self, Value};
 
 pub struct Fields {
     ast: FieldsNamed,
@@ -81,7 +81,10 @@ impl Field {
         let is_u64 = self.ty.to_token_stream().to_string() == "u64";
 
         Ok(if let Some(default) = &attrs.value {
-            Some(quote_spanned! { self.span() => #default })
+            match default {
+                Value::Expr(expr) => Some(quote_spanned! { self.span() => #expr }),
+                Value::Default => Some(quote_spanned! { self.span() => Default::default() }),
+            }
         } else if attrs.uuid {
             let Type::Path(ty) = &self.ty else {
                 return Err(syn::Error::new_spanned(

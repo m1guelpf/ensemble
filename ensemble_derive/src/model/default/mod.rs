@@ -1,9 +1,26 @@
-use deluxe::ParseMetaItem;
-use proc_macro2::{Ident, TokenStream};
+use deluxe::{ParseMetaItem, ParseMode};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned};
-use syn::Expr;
+use syn::{parse::ParseStream, Expr};
 
 use super::field::Fields;
+
+#[derive(Debug, Default)]
+pub enum Value {
+    #[default]
+    Default,
+    Expr(Expr),
+}
+
+impl ParseMetaItem for Value {
+    fn parse_meta_item(input: ParseStream, _mode: ParseMode) -> syn::Result<Self> {
+        Ok(Self::Expr(input.parse::<Expr>()?))
+    }
+
+    fn parse_meta_item_flag(_: Span) -> syn::Result<Self> {
+        Ok(Self::Default)
+    }
+}
 
 #[derive(Debug, ParseMetaItem, Default)]
 #[deluxe(default)]
@@ -13,7 +30,7 @@ pub struct Options {
     pub updated_at: bool,
     pub incrementing: Option<bool>,
     #[deluxe(rename = default)]
-    pub value: Option<Expr>,
+    pub value: Option<Value>,
 }
 
 pub fn r#impl(name: &Ident, fields: &Fields) -> syn::Result<TokenStream> {
