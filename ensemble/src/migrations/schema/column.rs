@@ -1,4 +1,5 @@
 use ensemble_derive::Column;
+#[cfg(feature = "mysql")]
 use itertools::Itertools;
 use rbs::Value;
 use std::{fmt::Display, sync::mpsc};
@@ -15,6 +16,7 @@ pub enum Type {
     Timestamp,
     BigInteger,
     String(u32),
+    #[cfg(feature = "mysql")]
     Enum(Vec<String>),
 }
 
@@ -31,6 +33,7 @@ impl Display for Type {
                 let value = format!("varchar({size})");
                 f.write_str(&value)
             }
+            #[cfg(feature = "mysql")]
             Self::Enum(values) => {
                 let value = format!(
                     "enum({})",
@@ -102,6 +105,7 @@ impl Column {
             rbs::to_value!(default)
         };
 
+        #[cfg(feature = "mysql")]
         if let Type::Enum(values) = &self.r#type {
             assert!(
                 values.contains(&value.as_str().unwrap_or_default().to_string()),
@@ -146,13 +150,6 @@ impl Column {
         }
 
         if let Some(default) = &self.default {
-            if let Type::Enum(values) = &self.r#type {
-                assert!(
-                    values.contains(&default.to_string()),
-                    "default value must be one of the enum values"
-                );
-            }
-
             sql.push_str(&format!(" DEFAULT {default}"));
         }
 

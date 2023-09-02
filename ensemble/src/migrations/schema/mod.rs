@@ -185,6 +185,7 @@ impl Table {
         ForeignIndex::new(column.to_string(), self.name.clone(), self.sender.clone())
     }
 
+    #[cfg(feature = "mysql")]
     /// Create a new enum column on the table.
     pub fn r#enum(&mut self, name: &str, values: &[&str]) -> Column {
         Column::new(
