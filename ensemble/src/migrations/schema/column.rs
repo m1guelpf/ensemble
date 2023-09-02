@@ -5,7 +5,7 @@ use rbs::Value;
 use std::{fmt::Display, sync::mpsc};
 
 use super::Schemable;
-use crate::connection;
+use crate::{connection, value::to_value};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
@@ -102,7 +102,7 @@ impl Column {
         let value = if self.r#type == Type::Json {
             Value::String(serde_json::to_string(&default).unwrap())
         } else {
-            rbs::to_value!(default)
+            to_value(default)
         };
 
         #[cfg(feature = "mysql")]

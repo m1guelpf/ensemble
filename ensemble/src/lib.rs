@@ -28,7 +28,7 @@ pub mod migrations;
 pub mod query;
 pub mod relationships;
 pub mod types;
-mod value;
+pub mod value;
 #[cfg(any(feature = "mysql", feature = "postgres"))]
 pub use connection::setup;
 pub use ensemble_derive::Model;
@@ -97,7 +97,7 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
     /// Returns an error if the model cannot be deleted, or if a connection to the database cannot be established.
     async fn delete(mut self) -> Result<(), query::Error> {
         let rows_affected = Self::query()
-            .r#where(Self::PRIMARY_KEY, "=", rbs::to_value!(self.primary_key()))
+            .r#where(Self::PRIMARY_KEY, "=", value::to_value(self.primary_key()))
             .delete()
             .await?;
 

@@ -8,13 +8,18 @@ mod has_one;
 
 use std::collections::HashMap;
 
-use crate::{builder::Builder, query::Error, value, Model};
+use crate::{
+    builder::Builder,
+    query::Error,
+    value::{self, to_value},
+    Model,
+};
 
 pub use belongs_to::BelongsTo;
 pub use belongs_to_many::BelongsToMany;
 pub use has_many::HasMany;
 pub use has_one::HasOne;
-use rbs::{to_value, Value};
+use rbs::Value;
 
 /// A relationship between two models.
 #[async_trait::async_trait]
@@ -65,7 +70,7 @@ fn find_related<M: Model, T: serde::Serialize>(
     value: T,
     wants_one: bool,
 ) -> Result<Vec<M>, Error> {
-    let value = to_value!(value);
+    let value = to_value(value);
 
     let related = related
         .iter()
@@ -75,7 +80,7 @@ fn find_related<M: Model, T: serde::Serialize>(
                 .is_some_and(|v| v.to_string() == value.to_string())
         })
         .take(if wants_one { 1 } else { usize::MAX })
-        .map(|model| value::from::<M>(to_value!(model)))
+        .map(|model| value::from::<M>(to_value(model)))
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(related)

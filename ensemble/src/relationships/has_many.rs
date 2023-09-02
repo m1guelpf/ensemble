@@ -114,12 +114,12 @@ impl<Local: Model, Related: Model> HasMany<Local, Related> {
     ///
     /// ```rust
     /// # use ensemble::{Model, relationships::HasMany};
-    /// # #[derive(Debug, Model)]
+    /// # #[derive(Debug, Model, Clone)]
     /// # struct Comment {
     /// #   id: u64,
     /// #   content: String,
     /// # }
-    /// # #[derive(Debug, Model)]
+    /// # #[derive(Debug, Model, Clone)]
     /// # struct Post {
     /// #  id: u64,
     /// #  comments: HasMany<Post, Comment>
@@ -127,7 +127,7 @@ impl<Local: Model, Related: Model> HasMany<Local, Related> {
     /// # async fn call() -> Result<(), ensemble::query::Error> {
     /// let mut post = Post::find(1).await?;
     ///
-    /// let comment = post.comments().create(Comment {
+    /// let comment = post.comments.create(Comment {
     ///  id: 1,
     ///  content: "Hello, world!".to_string(),
     /// }).await?;
