@@ -1,5 +1,5 @@
 use inflector::Inflector;
-use rbs::{to_value, Value};
+use rbs::Value;
 use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug};
 
@@ -137,7 +137,7 @@ impl<Local: Model, Related: Model> HasMany<Local, Related> {
     where
         Related: Clone,
     {
-        let Value::Map(mut value) = rbs::to_value(related)? else {
+        let Value::Map(mut value) = value::for_db(related)? else {
             return Err(Error::Serialization(rbs::Error::Syntax(
                 "Expected a map".to_string(),
             )));
@@ -145,7 +145,7 @@ impl<Local: Model, Related: Model> HasMany<Local, Related> {
 
         value.insert(
             Value::String(self.foreign_key.clone()),
-            to_value(&self.value)?,
+            value::for_db(&self.value)?,
         );
 
         let result = Related::create(value::from(Value::Map(value))?).await?;

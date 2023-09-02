@@ -293,7 +293,7 @@ fn visitor_deserialize(
     };
 
     Ok(quote! {
-        #[allow(clippy::clone_on_copy)]
+        #[allow(clippy::clone_on_copy, clippy::redundant_clone)]
         impl<'de> _serde::de::Visitor<'de> for #visitor_name {
             type Value = #name;
 

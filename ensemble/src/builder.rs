@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use rbs::{to_value, Value};
+use rbs::Value;
 use serde::Serialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -39,6 +39,10 @@ impl Builder {
     }
 
     /// Add a basic where clause to the query.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the provided value cannot be serialized.
     #[must_use]
     pub fn r#where<T, Op>(mut self, column: &str, operator: Op, value: T) -> Self
     where
@@ -49,7 +53,7 @@ impl Builder {
             boolean: Boolean::And,
             operator: operator.into(),
             column: column.to_string(),
-            value: Some(to_value!(value)),
+            value: Some(value::for_db(value).unwrap()),
         }));
 
         self
@@ -470,7 +474,7 @@ impl<T: Serialize> From<Vec<(&str, T)>> for Columns {
         Self(
             values
                 .iter()
-                .map(|(column, value)| ((*column).to_string(), to_value!(value)))
+                .map(|(column, value)| ((*column).to_string(), value::for_db(value).unwrap()))
                 .collect(),
         )
     }
@@ -480,7 +484,7 @@ impl<T: Serialize> From<&[(&str, T)]> for Columns {
         Self(
             values
                 .iter()
-                .map(|(column, value)| ((*column).to_string(), to_value!(value)))
+                .map(|(column, value)| ((*column).to_string(), value::for_db(value).unwrap()))
                 .collect(),
         )
     }
