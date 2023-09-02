@@ -6,7 +6,6 @@ use serde::{
     },
     Serialize,
 };
-use std::collections::HashMap;
 
 use crate::Model;
 
@@ -198,7 +197,7 @@ impl serde::Serializer for Serializer {
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         let se = MapSerializer {
             next_key: None,
-            map: HashMap::with_capacity(len.unwrap_or(0)),
+            map: Vec::with_capacity(len.unwrap_or(0)),
         };
         Ok(se)
     }
@@ -291,7 +290,7 @@ impl serde::ser::SerializeTupleVariant for SerializeTupleVariant {
 }
 
 struct MapSerializer {
-    map: HashMap<String, Value>,
+    map: Vec<(Value, Value)>,
     next_key: Option<Value>,
 }
 
@@ -311,24 +310,13 @@ impl SerializeMap for MapSerializer {
             .take()
             .expect("`serialize_value` called before `serialize_key`");
 
-        if let Value::String(key) = key {
-            self.map.insert(key, value.serialize(Serializer)?);
-            Ok(())
-        } else {
-            Err(rbs::Error::Syntax(
-                "Ensemble only supports string keys.".to_string(),
-            ))
-        }
+        self.map.push((key, value.serialize(Serializer)?));
+        Ok(())
     }
 
     #[inline]
     fn end(self) -> Result<Value, Self::Error> {
-        Ok(Value::Ext(
-            "Json",
-            Box::new(Value::String(serde_json::to_string(&self.map).map_err(
-                |e| rbs::Error::Syntax(format!("Failed to serialize into JSON: {}", e)),
-            )?)),
-        ))
+        Ok(Value::Map(ValueMap(self.map)))
     }
 }
 
@@ -378,7 +366,7 @@ impl SerializeStructVariant for StructSerializer {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{DateTime, Hashed, Uuid};
+    use crate::types::{DateTime, Hashed, Json, Uuid};
 
     use super::*;
     use serde::{Deserialize, Serialize};
@@ -473,10 +461,10 @@ mod tests {
 
     #[test]
     fn properly_serializes_json() {
-        let json = json!({
+        let json = Json(json!({
             "hello": "world",
             "foo": "bar",
-        });
+        }));
 
         assert_eq!(
             for_db(&json).unwrap(),
