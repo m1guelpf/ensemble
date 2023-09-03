@@ -424,7 +424,7 @@ checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 
 [[package]]
 name = "ensemble"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "Inflector",
  "async-trait",
@@ -455,7 +455,7 @@ dependencies = [
 
 [[package]]
 name = "ensemble_derive"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "Inflector",
  "deluxe",
