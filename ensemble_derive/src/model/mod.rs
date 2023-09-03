@@ -108,7 +108,7 @@ fn impl_eager_load(fields: &Fields) -> TokenStream {
         let ident = &field.ident;
 
         quote_spanned! {field.span() =>
-            stringify!(#ident) => self.#ident.eager_query(related.iter().map(|model| model.#ident.value).collect()),
+            stringify!(#ident) => self.#ident.eager_query(related.iter().map(|model| &model.#ident.value).cloned().collect()),
         }
     });
 
@@ -195,7 +195,7 @@ fn impl_save(fields: &Fields, primary_key: &Field) -> TokenStream {
 
             let rows_affected = Self::query()
                 .r#where(Self::PRIMARY_KEY, "=", &self.#ident)
-                .update(::ensemble::value::to_value(self))
+                .update(::ensemble::value::for_db(self)?)
                 .await?;
 
             if rows_affected != 1 {
@@ -213,7 +213,7 @@ fn impl_find(primary_key: &Field) -> TokenStream {
     quote! {
         async fn find(#ident: Self::PrimaryKey) -> Result<Self, ::ensemble::query::Error> {
             Self::query()
-                .r#where(Self::PRIMARY_KEY, "=", ::ensemble::value::to_value(#ident))
+                .r#where(Self::PRIMARY_KEY, "=", ::ensemble::value::for_db(#ident)?)
                 .first()
                 .await?
                 .ok_or(::ensemble::query::Error::NotFound)
@@ -271,13 +271,13 @@ fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> TokenStrea
     {
         let primary_key = &primary_key.ident;
         quote! {
-            self.#primary_key = Self::query().insert(::ensemble::rbs::to_value(&self)?).await?;
+            self.#primary_key = Self::query().insert(::ensemble::value::for_db(&self)?).await?;
 
             Ok(self)
         }
     } else {
         quote! {
-            Self::query().insert(::ensemble::rbs::to_value(&self)?).await?;
+            Self::query().insert(::ensemble::value::for_db(&self)?).await?;
 
             Ok(self)
         }

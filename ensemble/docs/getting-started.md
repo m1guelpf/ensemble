@@ -82,14 +82,16 @@ Like we've said, Ensemble requires each model to have at least one uniquely iden
 
 Instead of using auto-incrementing integers as your Ensemble model's primary keys, you may choose to use UUIDs instead. UUIDs are universally unique alpha-numeric identifiers that are 36 characters long.
 
-If you would like a model to use a UUID key instead of an auto-incrementing integer key, you may use the `uuid::Uuid` type on the model's primary key, and mark it with the `#[model(uuid)]` attribute:
+If you would like a model to use a UUID key instead of an auto-incrementing integer key, you may use the `ensemble::types::Uuid` type on the model's primary key, and mark it with the `#[model(uuid)]` attribute:
 
 ```rust
+use ensemble::types::Uuid;
 # use ensemble::Model;
+
 #[derive(Debug, Model)]
 struct Flight {
     #[model(uuid)]
-    pub id: uuid::Uuid,
+    pub id: Uuid,
     pub name: String,
 }
 ```

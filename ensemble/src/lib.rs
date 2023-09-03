@@ -97,7 +97,11 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
     /// Returns an error if the model cannot be deleted, or if a connection to the database cannot be established.
     async fn delete(mut self) -> Result<(), query::Error> {
         let rows_affected = Self::query()
-            .r#where(Self::PRIMARY_KEY, "=", value::to_value(self.primary_key()))
+            .r#where(
+                Self::PRIMARY_KEY,
+                "=",
+                value::for_db(self.primary_key()).unwrap(),
+            )
             .delete()
             .await?;
 

@@ -219,7 +219,8 @@ fn visitor_deserialize(
             return None;
         }
 
-        Some(quote_spanned! {f.span()=> let #ident = #ident.ok_or_else(|| _serde::de::Error::missing_field(stringify!(#column)))?; })
+        let ty = &f.ty;
+        Some(quote_spanned! {f.span()=> let #ident: #ty = #ident.ok_or_else(|| _serde::de::Error::missing_field(stringify!(#column)))?; })
     });
 
     let ensure_no_leftovers = if needs_collect {
@@ -234,9 +235,14 @@ fn visitor_deserialize(
 
     let model_keys = fields.fields.iter().map(|f| {
         let ident = &f.ident;
+        let ty = &f.ty;
 
         let Some((relationship_type, related, (relationship_key, relationship_expr))) = &f.relationship(primary_key) else {
-            return quote_spanned! {f.span()=> #ident: #ident };
+            return if f.attr.used_in_relationship {
+                quote_spanned! {f.span()=> #ident: #ident.clone() }
+            } else {
+                quote_spanned! {f.span()=> #ident: #ident }
+            }
         };
 
         let relationship_ident = Ident::new(&relationship_type.to_string(), f.span());
@@ -249,15 +255,17 @@ fn visitor_deserialize(
                 quote_spanned! {f.span()=> {
                     let key: &'static str = #relationship_expr.leak();
 
-                    _serde::de::Deserialize::deserialize::<_serde::__private::de::ContentDeserializer<'_, _serde::de::value::Error>>(
+                    let value: <#ty as ::ensemble::relationships::Relationship>::Key = _serde::de::Deserialize::deserialize::<_serde::__private::de::ContentDeserializer<'_, _serde::de::value::Error>>(
                         __collect.remove(key).ok_or_else(|| _serde::de::Error::missing_field(key))?.clone().into_deserializer()
-                    ).unwrap()
+                    ).unwrap();
+
+                    value
                 }}
             }, |key| quote_spanned! {f.span()=> #key });
 
         let foreign_key = f.foreign_key(*relationship_type, related);
 
-        quote_spanned! {f.span()=> #ident: <#relationship_ident<#name, #related>>::build(#key_ident, #foreign_key) }
+        quote_spanned! {f.span()=> #ident: <#relationship_ident<#name, #related>>::build(#key_ident.clone(), #foreign_key) }
     });
 
     let build_model = quote! {
@@ -285,6 +293,7 @@ fn visitor_deserialize(
     };
 
     Ok(quote! {
+        #[allow(clippy::clone_on_copy, clippy::redundant_clone)]
         impl<'de> _serde::de::Visitor<'de> for #visitor_name {
             type Value = #name;
 

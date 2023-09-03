@@ -1,5 +1,6 @@
 use inflector::Inflector;
 use itertools::{Either, Itertools};
+use rbs::Value;
 use std::{any::type_name, sync::mpsc};
 
 use self::{
@@ -7,7 +8,7 @@ use self::{
     command::{Command, ForeignIndex},
 };
 use super::{migrator::MIGRATE_CONN, Error};
-use crate::{connection, value::to_value, Model};
+use crate::{connection, Model};
 
 mod column;
 mod command;
@@ -74,7 +75,10 @@ impl Schema {
         let mut conn_lock = MIGRATE_CONN.try_lock().map_err(|_| Error::Lock)?;
         let mut conn = conn_lock.take().ok_or(Error::Lock)?;
 
-        let (sql, bindings) = (format!("DROP TABLE ?"), vec![to_value(table_name)]);
+        let (sql, bindings) = (
+            format!("DROP TABLE ?"),
+            vec![Value::String(table_name.to_string())],
+        );
 
         tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Running DROP TABLE SQL query");
         let query_result = conn.exec(&sql, bindings).await;

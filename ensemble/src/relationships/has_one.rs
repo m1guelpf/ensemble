@@ -3,7 +3,7 @@ use rbs::Value;
 use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug};
 
-use super::{find_related, Relationship};
+use super::{find_related, Relationship, Status};
 use crate::{builder::Builder, query::Error, Model};
 
 /// ## A One to One relationship.
@@ -36,7 +36,7 @@ use crate::{builder::Builder, query::Error, Model};
 #[derive(Clone, Default)]
 pub struct HasOne<Local: Model, Related: Model> {
     foreign_key: String,
-    relation: Option<Related>,
+    relation: Status<Related>,
     /// The value of the local model's primary key.
     pub value: Local::PrimaryKey,
 }
@@ -55,7 +55,7 @@ impl<Local: Model, Related: Model> Relationship for HasOne<Local, Related> {
         Self {
             value,
             foreign_key,
-            relation: None,
+            relation: Status::Initial,
         }
     }
 
@@ -86,7 +86,7 @@ impl<Local: Model, Related: Model> Relationship for HasOne<Local, Related> {
         if self.relation.is_none() {
             let relation = self.query().first().await?.ok_or(Error::NotFound)?;
 
-            self.relation = Some(relation);
+            self.relation = Status::Fetched(Some(relation));
         }
 
         Ok(self.relation.as_ref().unwrap())
@@ -95,7 +95,7 @@ impl<Local: Model, Related: Model> Relationship for HasOne<Local, Related> {
     fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
         let related = find_related(related, &self.foreign_key, &self.value, true)?;
 
-        self.relation = related.into_iter().next();
+        self.relation = Status::Fetched(related.into_iter().next());
 
         Ok(())
     }

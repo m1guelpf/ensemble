@@ -8,6 +8,7 @@ use std::time::Duration;
 
 /// A date and time value, used for storing timestamps in the database.
 #[derive(Clone, Eq, PartialEq, Hash)]
+#[repr(transparent)]
 pub struct DateTime(pub fastdate::DateTime);
 
 impl Display for DateTime {

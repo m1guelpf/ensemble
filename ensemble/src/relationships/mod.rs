@@ -7,13 +7,9 @@ mod has_many;
 mod has_one;
 
 use std::collections::HashMap;
+use std::ops::Deref;
 
-use crate::{
-    builder::Builder,
-    query::Error,
-    value::{self, to_value},
-    Model,
-};
+use crate::{builder::Builder, query::Error, value, Model};
 
 pub use belongs_to::BelongsTo;
 pub use belongs_to_many::BelongsToMany;
@@ -64,13 +60,31 @@ pub trait Relationship {
     fn build(value: Self::Key, related_key: Self::RelatedKey) -> Self;
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+enum Status<T> {
+    #[default]
+    Initial,
+    Fetched(Option<T>),
+}
+
+impl<T> Deref for Status<T> {
+    type Target = Option<T>;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Initial => &None,
+            Self::Fetched(value) => value,
+        }
+    }
+}
+
 fn find_related<M: Model, T: serde::Serialize>(
     related: &[HashMap<String, Value>],
     foreign_key: &str,
     value: T,
     wants_one: bool,
 ) -> Result<Vec<M>, Error> {
-    let value = to_value(value);
+    let value = value::for_db(value)?;
 
     let related = related
         .iter()
@@ -80,7 +94,7 @@ fn find_related<M: Model, T: serde::Serialize>(
                 .is_some_and(|v| v.to_string() == value.to_string())
         })
         .take(if wants_one { 1 } else { usize::MAX })
-        .map(|model| value::from::<M>(to_value(model)))
+        .map(|model| value::from::<M>(value::for_db(model).unwrap()))
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(related)
