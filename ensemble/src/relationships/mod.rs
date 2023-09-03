@@ -9,7 +9,7 @@ mod has_one;
 use std::ops::Deref;
 use std::{collections::HashMap, ops::DerefMut};
 
-use crate::{builder::Builder, query::Error, value, Model};
+use crate::{query::Builder, value, Error, Model};
 
 pub use belongs_to::BelongsTo;
 pub use belongs_to_many::BelongsToMany;

@@ -91,7 +91,7 @@ fn impl_fill_relation(fields: &Fields) -> TokenStream {
     });
 
     quote! {
-        fn fill_relation(&mut self, relation: &str, related: &[::std::collections::HashMap<::std::string::String, ::ensemble::rbs::Value>]) -> Result<(), ::ensemble::query::Error> {
+        fn fill_relation(&mut self, relation: &str, related: &[::std::collections::HashMap<::std::string::String, ::ensemble::rbs::Value>]) -> Result<(), ::ensemble::Error> {
             match relation {
                 #(#fill_relation)*
                 _ => panic!("Model does not have a {relation} relation"),
@@ -111,7 +111,7 @@ fn impl_eager_load(fields: &Fields) -> TokenStream {
     });
 
     quote! {
-        fn eager_load(&self, relation: &str, related: &[&Self]) -> ::ensemble::builder::Builder {
+        fn eager_load(&self, relation: &str, related: &[&Self]) -> ::ensemble::query::Builder {
             match relation {
                 #(#eager_loads)*
                 _ => panic!("Model does not have a {relation} relation"),
@@ -124,7 +124,7 @@ fn impl_fresh(primary_key: &Field) -> TokenStream {
     let ident = &primary_key.ident;
 
     quote! {
-        async fn fresh(&self) -> Result<Self, ::ensemble::query::Error> {
+        async fn fresh(&self) -> Result<Self, ::ensemble::Error> {
             Self::find(self.#ident.clone()).await
         }
     }
@@ -152,7 +152,7 @@ fn impl_relationships(name: &Ident, fields: &Fields) -> syn::Result<TokenStream>
 
         quote_spanned! {f.span() =>
             #[allow(dead_code)]
-            pub async fn #ident(&mut self) -> Result<&mut #return_type, ::ensemble::query::Error> {
+            pub async fn #ident(&mut self) -> Result<&mut #return_type, ::ensemble::Error> {
                 self.#ident.get().await
             }
         }
@@ -188,7 +188,7 @@ fn impl_save(fields: &Fields, primary_key: &Field) -> TokenStream {
         .collect::<TokenStream>();
 
     quote! {
-        async fn save(&mut self) -> Result<(), ::ensemble::query::Error> {
+        async fn save(&mut self) -> Result<(), ::ensemble::Error> {
             #update_timestamp
             #run_validation
 
@@ -198,7 +198,7 @@ fn impl_save(fields: &Fields, primary_key: &Field) -> TokenStream {
                 .await?;
 
             if rows_affected != 1 {
-                return Err(::ensemble::query::Error::UniqueViolation);
+                return Err(::ensemble::Error::UniqueViolation);
             }
 
             Ok(())
@@ -210,12 +210,12 @@ fn impl_find(primary_key: &Field) -> TokenStream {
     let ident = &primary_key.ident;
 
     quote! {
-        async fn find(#ident: Self::PrimaryKey) -> Result<Self, ::ensemble::query::Error> {
+        async fn find(#ident: Self::PrimaryKey) -> Result<Self, ::ensemble::Error> {
             Self::query()
                 .r#where(Self::PRIMARY_KEY, "=", ::ensemble::value::for_db(#ident)?)
                 .first()
                 .await?
-                .ok_or(::ensemble::query::Error::NotFound)
+                .ok_or(::ensemble::Error::NotFound)
         }
     }
 }
@@ -237,7 +237,7 @@ fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> TokenStrea
 
             quote_spanned! {field.span() =>
                 if self.#ident == <#ty>::default() {
-                    return Err(::ensemble::query::Error::Required(stringify!(#ident)));
+                    return Err(::ensemble::Error::Required(stringify!(#ident)));
                 }
             }
         });
@@ -283,7 +283,7 @@ fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> TokenStrea
     };
 
     quote! {
-        async fn create(mut self) -> Result<Self, ::ensemble::query::Error> {
+        async fn create(mut self) -> Result<Self, ::ensemble::Error> {
             #(#update_timestamps)*
             #run_validation
             #(#required)*

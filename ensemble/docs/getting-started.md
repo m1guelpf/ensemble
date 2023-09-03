@@ -154,7 +154,7 @@ Once you have created a model and its associated database table, you are ready t
 #    id: u64,
 #    name: String
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 for flight in Flight::all().await? {
     println!("{}", flight.name);
 }
@@ -173,7 +173,7 @@ The Ensemble `all` method will return all of the results in the model's table. H
 #    id: u64,
 #    name: String
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let flights: Vec<Flight> = Flight::query()
     .r#where("active", '=', 1)
     .order_by("name", "asc")
@@ -194,7 +194,7 @@ If you already have an instance of an Ensemble model that was retrieved from the
 #    id: u64,
 #    name: String
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let flight: Flight = Flight::query()
     .r#where("number", '=', "FR 900")
     .first().await?
@@ -216,7 +216,7 @@ In addition to retrieving all of the records matching a given query, you may als
 #    id: u64,
 #    name: String
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 // Retrieve a model by its primary key...
 let flight = Flight::find(1).await?;
 
@@ -272,7 +272,7 @@ Alternatively, you may use the `create` method to "save" a new model using a sin
 #    id: u64,
 #    name: String
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let flight = Flight::create(Flight {
     name: "London to Paris".to_string(),
     ..Flight::default()
@@ -292,7 +292,7 @@ The `save` method may also be used to update models that already exist in the da
 #    id: u64,
 #    name: String
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let mut flight = Flight::find(1).await?;
 
 flight.name = "Paris to London".to_string();
@@ -312,7 +312,7 @@ Updates can also be performed against models that match a given query. In this e
 # struct Flight {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 Flight::query()
     .r#where("active", '=', 1)
     .r#where("destination", '=', "San Diego")
@@ -334,7 +334,7 @@ To delete a model, you may call the delete method on the model instance:
 # struct Flight {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let flight = Flight::find(1).await?;
 
 flight.delete().await?;
@@ -350,7 +350,7 @@ You may call the truncate method to delete all of the model's associated databas
 # struct Flight {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 Flight::query().truncate().await?;
 # Ok(())
 # }
@@ -366,7 +366,7 @@ Of course, you may build an Ensemble query to delete all models matching your qu
 # struct Flight {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 Flight::query()
     .r#where("active", '=', 0)
     .delete().await?;
@@ -384,7 +384,7 @@ To convert a model to JSON, you should use the `json` method. This will return a
 # struct User {
 #  pub id: u64
 # }
-# async fn test() -> Result<serde_json::Value, ensemble::query::Error> {
+# async fn test() -> Result<serde_json::Value, ensemble::Error> {
 let user = User::find(1).await?;
 
 return Ok(user.json());

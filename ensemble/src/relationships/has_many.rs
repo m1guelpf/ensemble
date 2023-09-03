@@ -5,10 +5,9 @@ use std::{collections::HashMap, fmt::Debug};
 
 use super::{find_related, Relationship, Status};
 use crate::{
-    builder::Builder,
-    query::Error,
+    query::Builder,
     value::{self, serializing_for_db},
-    Model,
+    Error, Model,
 };
 
 /// ## A One to Many relationship.
@@ -33,7 +32,7 @@ use crate::{
 ///   comments: HasMany<Post, Comment>
 /// }
 ///
-/// # async fn call() -> Result<(), ensemble::query::Error> {
+/// # async fn call() -> Result<(), ensemble::Error> {
 /// let mut post = Post::find(1).await?;
 ///
 /// let comments: &Vec<Comment> = post.comments().await?;
@@ -137,7 +136,7 @@ impl<Local: Model, Related: Model> HasMany<Local, Related> {
     /// #  id: u64,
     /// #  comments: HasMany<Post, Comment>
     /// # }
-    /// # async fn call() -> Result<(), ensemble::query::Error> {
+    /// # async fn call() -> Result<(), ensemble::Error> {
     /// let mut post = Post::find(1).await?;
     ///
     /// let comment = post.comments.create(Comment {

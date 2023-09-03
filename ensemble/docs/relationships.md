@@ -23,7 +23,7 @@ use ensemble::relationships::Relationship;
 # struct Post {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 # let mut user = User::find(1).await?;
 let posts = user.posts().await?;
 
@@ -70,7 +70,7 @@ The [`HasOne`] type expects two generics: the type of the current model, and the
 # struct Phone {
 #    id: u64,
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let mut user = User::find(1).await?;
 
 let phone = user.phone().await?;
@@ -179,7 +179,7 @@ Once the relationship method has been defined, we can access the list of related
 #    id: u64,
 #    text: String
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let mut post = Post::find(1).await?;
 
 for comment in post.comments().await? {
@@ -202,7 +202,7 @@ Since all relationships also serve as query builders, you may add further constr
 # struct Comment {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let post = Post::find(1).await?;
 
 let comment: Option<Comment> = post.comments.query()
@@ -266,7 +266,7 @@ Once the relationship has been defined, we can retrieve a comment's parent post 
 #    id: u64,
 #    title: String
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let mut comment = Comment::find(1).await?;
 
 let post_title = &comment.post().await?.title;
@@ -355,7 +355,7 @@ Once the relationship is defined, you may access the user's roles using the `rol
 #    id: u64,
 #    name: String
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let mut user = User::find(1).await?;
 
 for role in user.roles().await? {
@@ -378,7 +378,7 @@ Since all relationships also serve as query builders, you may add further constr
 # struct Role {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let user = User::find(1).await?;
 
 let roles: Vec<Role> = user.roles.query()
@@ -479,7 +479,7 @@ You may query the `posts` relationship and add additional constraints to the rel
 # struct Post {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let user = User::find(1).await?;
 
 let posts: Vec<Post> = user.posts.query()
@@ -504,7 +504,7 @@ As demonstrated in the example above, you are free to add additional constraints
 # struct Post {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 # let mut user = User::find(1).await?;
 let posts: Vec<Post> = user.posts.query()
     .r#where("active", '=', 1)
@@ -535,7 +535,7 @@ In most situations, you should use logical groups to group the conditional check
 # struct Post {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 # let mut user = User::find(1).await?;
 let posts: Vec<Post> = user.posts.query()
     .r#where("active", '=', 1)
@@ -571,7 +571,7 @@ If you do not need to add additional constraints to an Ensemble relationship que
 #    id: u64,
 #    title: String
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let mut user = User::find(1).await?;
 
 for post in user.posts().await? {
@@ -598,7 +598,7 @@ Sometimes you may want to count the number of related models for a given relatio
 # struct Post {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let user = User::find(1).await?;
 
 let posts_count = user.posts.query().count().await?;
@@ -639,7 +639,7 @@ Now, let's retrieve all books and their authors:
 #    id: u64,
 #    name: String
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 for mut book in Book::all().await? {
     let author = book.author().await?;
 
@@ -665,7 +665,7 @@ Thankfully, we can use eager loading to reduce this operation to just two querie
 #    id: u64,
 #    name: String
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 for mut book in Book::with("author").get::<Book>().await? {
     let author = book.author().await?;
 
@@ -693,7 +693,7 @@ Sometimes you may need to eager load several different relationships. To do so, 
 # struct Book {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 let books: Vec<Book> = Book::with(vec!["author", "publisher"]).get().await?;
 # Ok(())
 # }
@@ -709,7 +709,7 @@ Sometimes you may need to eager load a relationship after the parent model has a
 # struct Book {
 #    id: u64
 # }
-# async fn example() -> Result<(), ensemble::query::Error> {
+# async fn example() -> Result<(), ensemble::Error> {
 # let someCondition = true;
 let mut book = Book::find(1).await?;
 

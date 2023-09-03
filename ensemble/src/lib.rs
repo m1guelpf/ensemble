@@ -5,6 +5,7 @@
 
 #[doc(hidden)]
 pub use async_trait::async_trait;
+use connection::ConnectError;
 #[doc(hidden)]
 pub use inflector::Inflector;
 #[doc(hidden)]
@@ -15,14 +16,13 @@ pub use serde;
 #[cfg(feature = "json")]
 pub use serde_json;
 
-use builder::{Builder, EagerLoad};
+use query::{Builder, EagerLoad};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},
 };
 
-pub mod builder;
 mod connection;
 pub mod migrations;
 pub mod query;
@@ -32,6 +32,34 @@ pub mod value;
 #[cfg(any(feature = "mysql", feature = "postgres"))]
 pub use connection::setup;
 pub use ensemble_derive::Model;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Connection(#[from] ConnectError),
+
+    #[cfg(feature = "validator")]
+    #[error(transparent)]
+    Validation(#[from] validator::ValidationErrors),
+
+    #[error("{0}")]
+    Database(String),
+
+    #[error("The {0} field is required.")]
+    Required(&'static str),
+
+    #[error("Failed to serialize model.")]
+    Serialization(#[from] rbs::value::ext::Error),
+
+    #[error("The model could not be found.")]
+    NotFound,
+
+    #[error("The unique constraint was violated.")]
+    UniqueViolation,
+
+    #[error("The query is invalid.")]
+    InvalidQuery,
+}
 
 #[async_trait]
 pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + Default {
@@ -62,7 +90,7 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
     /// # Errors
     ///
     /// Returns an error if the query fails, or if a connection to the database cannot be established.
-    async fn all() -> Result<Vec<Self>, query::Error> {
+    async fn all() -> Result<Vec<Self>, Error> {
         Self::query().get().await
     }
 
@@ -71,28 +99,28 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
     /// # Errors
     ///
     /// Returns an error if the model cannot be found, or if a connection to the database cannot be established.
-    async fn find(key: Self::PrimaryKey) -> Result<Self, query::Error>;
+    async fn find(key: Self::PrimaryKey) -> Result<Self, Error>;
 
     /// Insert a new model into the database.
     ///
     /// # Errors
     ///
     /// Returns an error if the model cannot be inserted, or if a connection to the database cannot be established.
-    async fn create(self) -> Result<Self, query::Error>;
+    async fn create(self) -> Result<Self, Error>;
 
     /// Update the model in the database.
     ///
     /// # Errors
     ///
     /// Returns an error if the model cannot be updated, or if a connection to the database cannot be established.
-    async fn save(&mut self) -> Result<(), query::Error>;
+    async fn save(&mut self) -> Result<(), Error>;
 
     /// Delete the model from the database.
     ///
     /// # Errors
     ///
     /// Returns an error if the model cannot be deleted, or if a connection to the database cannot be established.
-    async fn delete(mut self) -> Result<(), query::Error> {
+    async fn delete(mut self) -> Result<(), Error> {
         let rows_affected = Self::query()
             .r#where(
                 Self::PRIMARY_KEY,
@@ -103,7 +131,7 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
             .await?;
 
         if rows_affected != 1 {
-            return Err(query::Error::UniqueViolation);
+            return Err(Error::UniqueViolation);
         }
 
         Ok(())
@@ -113,7 +141,7 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
     ///
     /// # Errors
     /// Returns an error if the model cannot be retrieved, or if a connection to the database cannot be established.
-    async fn fresh(&self) -> Result<Self, query::Error>;
+    async fn fresh(&self) -> Result<Self, Error>;
 
     /// Begin querying the model.
     #[must_use]
@@ -126,7 +154,7 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
         Self::query().with(eager_load)
     }
 
-    async fn load<T: Into<EagerLoad> + Send>(&mut self, relation: T) -> Result<(), query::Error> {
+    async fn load<T: Into<EagerLoad> + Send>(&mut self, relation: T) -> Result<(), Error> {
         for relation in relation.into().list() {
             let rows = self.eager_load(&relation, &[&self]).get_rows().await?;
 
@@ -158,7 +186,7 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
         &mut self,
         relation: &str,
         related: &[HashMap<String, rbs::Value>],
-    ) -> Result<(), query::Error>;
+    ) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -168,7 +196,7 @@ pub trait Collection {
     /// # Errors
     ///
     /// Returns an error if any of the models fail to load, or if a connection to the database cannot be established.
-    async fn load<T>(&mut self, relation: T) -> Result<(), query::Error>
+    async fn load<T>(&mut self, relation: T) -> Result<(), Error>
     where
         T: Into<EagerLoad> + Send + Sync + Clone;
 
@@ -183,7 +211,7 @@ pub trait Collection {
 
 #[async_trait]
 impl<T: Model> Collection for &mut Vec<T> {
-    async fn load<U>(&mut self, relation: U) -> Result<(), query::Error>
+    async fn load<U>(&mut self, relation: U) -> Result<(), Error>
     where
         U: Into<EagerLoad> + Send + Sync + Clone,
     {

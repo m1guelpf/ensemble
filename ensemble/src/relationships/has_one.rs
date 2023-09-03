@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug};
 
 use super::{find_related, Relationship, Status};
-use crate::{builder::Builder, query::Error, value::serializing_for_db, Model};
+use crate::{query::Builder, value::serializing_for_db, Error, Model};
 
 /// ## A One to One relationship.
 /// A one-to-one relationship is a very basic type of database relationship. For example, a User model might be associated with one Phone model.
@@ -26,7 +26,7 @@ use crate::{builder::Builder, query::Error, value::serializing_for_db, Model};
 ///   phone: HasOne<User, Phone>
 /// }
 ///
-/// # async fn call() -> Result<(), ensemble::query::Error> {
+/// # async fn call() -> Result<(), ensemble::Error> {
 /// let mut user = User::find(1).await?;
 ///
 /// let phone: &Phone = user.phone().await?;

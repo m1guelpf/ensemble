@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug};
 
 use super::{find_related, Relationship, Status};
-use crate::{builder::Builder, query::Error, value::serializing_for_db, Model};
+use crate::{query::Builder, value::serializing_for_db, Error, Model};
 
 /// ## A Many to Many relationship.
 /// A many to many relationship is used to define relationships where a model is the parent of one or more child models, but can also be a child to multiple parent models.
@@ -25,7 +25,7 @@ use crate::{builder::Builder, query::Error, value::serializing_for_db, Model};
 ///   roles: BelongsToMany<User, Role>
 /// }
 ///
-/// # async fn call() -> Result<(), ensemble::query::Error> {
+/// # async fn call() -> Result<(), ensemble::Error> {
 /// let mut user = User::find(1).await?;
 ///
 /// let roles: &Vec<Role> = user.roles().await?;

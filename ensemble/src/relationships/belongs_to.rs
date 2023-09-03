@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug};
 
 use super::{find_related, Relationship, Status};
-use crate::{builder::Builder, query::Error, value::serializing_for_db, Model};
+use crate::{query::Builder, value::serializing_for_db, Error, Model};
 
 /// ## A Belongs To relationship.
 /// A belongs to relationship is used to define relationships where a model is the child to a single models. For example, a website may belong to a user.
@@ -26,7 +26,7 @@ use crate::{builder::Builder, query::Error, value::serializing_for_db, Model};
 ///   user: BelongsTo<Site, User>
 /// }
 ///
-/// # async fn call() -> Result<(), ensemble::query::Error> {
+/// # async fn call() -> Result<(), ensemble::Error> {
 /// let mut site = Site::find(1).await?;
 ///
 /// let user: &User = site.user().await?;
