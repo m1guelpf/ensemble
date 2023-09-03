@@ -1,22 +1,7 @@
 use rbs::{value::map::ValueMap, Value};
 use serde::{ser, Serialize};
 
-use crate::Model;
-
-pub(crate) fn from<M: Model>(value: Value) -> Result<M, rbs::Error> {
-    rbs::from_value::<M>(value)
-}
-
-/// Serialize a model for the database.
-///
-/// # Errors
-///
-/// Returns an error if serialization fails.
-pub fn for_db<T: Serialize>(value: T) -> Result<Value, rbs::Error> {
-    value.serialize(Serializer)
-}
-
-fn fast_serialize<T: Serialize>(mut value: T) -> Result<Value, rbs::Error> {
+pub fn fast_serialize<T: Serialize>(mut value: T) -> Result<Value, rbs::Error> {
     let type_name = std::any::type_name::<T>();
     if type_name == std::any::type_name::<Value>() {
         let addr = std::ptr::addr_of_mut!(value);
@@ -454,7 +439,7 @@ mod tests {
         };
 
         assert_eq!(
-            for_db(test).unwrap(),
+            fast_serialize(test).unwrap(),
             rbs::to_value! {
                 "a" : 1,
                 "b" : "test",
@@ -472,10 +457,13 @@ mod tests {
 
     #[test]
     fn test_serialize_enum() {
-        assert_eq!(for_db(Status::Ok).unwrap(), rbs::to_value!("Ok"));
-        assert_eq!(for_db(Status::Error).unwrap(), rbs::to_value!("Error"));
+        assert_eq!(fast_serialize(Status::Ok).unwrap(), rbs::to_value!("Ok"));
         assert_eq!(
-            for_db(Status::ThirdThing).unwrap(),
+            fast_serialize(Status::Error).unwrap(),
+            rbs::to_value!("Error")
+        );
+        assert_eq!(
+            fast_serialize(Status::ThirdThing).unwrap(),
             rbs::to_value!("ThirdThing")
         );
     }
@@ -490,10 +478,13 @@ mod tests {
 
     #[test]
     fn test_serialize_enum_with_custom_config() {
-        assert_eq!(for_db(StatusV2::Ok).unwrap(), rbs::to_value!("ok"));
-        assert_eq!(for_db(StatusV2::Error).unwrap(), rbs::to_value!("error"));
+        assert_eq!(fast_serialize(StatusV2::Ok).unwrap(), rbs::to_value!("ok"));
         assert_eq!(
-            for_db(StatusV2::ThirdThing).unwrap(),
+            fast_serialize(StatusV2::Error).unwrap(),
+            rbs::to_value!("error")
+        );
+        assert_eq!(
+            fast_serialize(StatusV2::ThirdThing).unwrap(),
             rbs::to_value!("third_thing")
         );
     }
@@ -503,7 +494,7 @@ mod tests {
         let datetime = DateTime::now();
 
         assert_eq!(
-            for_db(&datetime).unwrap(),
+            fast_serialize(&datetime).unwrap(),
             Value::Ext("DateTime", Box::new(rbs::to_value!(datetime.0)))
         );
     }
@@ -513,7 +504,7 @@ mod tests {
         let uuid = Uuid::new();
 
         assert_eq!(
-            for_db(&uuid).unwrap(),
+            fast_serialize(&uuid).unwrap(),
             Value::Ext("Uuid", Box::new(Value::String(uuid.to_string())))
         );
     }
@@ -522,7 +513,10 @@ mod tests {
     fn properly_serializes_hashed() {
         let hashed = Hashed::new("hello-world");
 
-        assert_eq!(for_db(&hashed).unwrap(), Value::String(hashed.to_string()));
+        assert_eq!(
+            fast_serialize(&hashed).unwrap(),
+            Value::String(hashed.to_string())
+        );
     }
 
     #[test]
@@ -533,7 +527,7 @@ mod tests {
         }));
 
         assert_eq!(
-            for_db(&json).unwrap(),
+            fast_serialize(&json).unwrap(),
             Value::Ext("Json", Box::new(Value::String(json.to_string())))
         );
     }
