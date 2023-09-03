@@ -15,6 +15,7 @@ pub struct Builder {
     join: Vec<Join>,
     order: Vec<Order>,
     limit: Option<usize>,
+    offset: Option<usize>,
     r#where: Vec<WhereClause>,
     eager_load: HashSet<String>,
 }
@@ -24,6 +25,7 @@ impl Builder {
         Self {
             table,
             limit: None,
+            offset: None,
             join: vec![],
             order: vec![],
             r#where: vec![],
@@ -68,7 +70,7 @@ impl Builder {
 
     /// Apply the given callback to the builder if the provided [`Option`] is `Some`.
     #[must_use]
-    pub fn when_some<T, F>(mut self, value: Option<T>, r#fn: impl FnOnce(Self, T) -> Self) -> Self {
+    pub fn when_some<T>(mut self, value: Option<T>, r#fn: impl FnOnce(Self, T) -> Self) -> Self {
         if let Some(value) = value {
             self = r#fn(self, value);
         }
@@ -101,6 +103,13 @@ impl Builder {
     #[must_use]
     pub const fn limit(mut self, take: usize) -> Self {
         self.limit = Some(take);
+        self
+    }
+
+    /// Set the "offset" value of the query.
+    #[must_use]
+    pub const fn offset(mut self, skip: usize) -> Self {
+        self.offset = Some(skip);
         self
     }
 
@@ -234,6 +243,10 @@ impl Builder {
 
         if let Some(take) = self.limit {
             sql.push_str(&format!(" LIMIT {take}"));
+        }
+
+        if let Some(skip) = self.offset {
+            sql.push_str(&format!(" OFFSET {skip}"));
         }
 
         sql
