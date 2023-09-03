@@ -70,7 +70,7 @@ impl Builder {
 
     /// Apply the given callback to the builder if the provided [`Option`] is `Some`.
     #[must_use]
-    pub fn when_some<T, F>(mut self, value: Option<T>, r#fn: impl FnOnce(Self, T) -> Self) -> Self {
+    pub fn when_some<T>(mut self, value: Option<T>, r#fn: impl FnOnce(Self, T) -> Self) -> Self {
         if let Some(value) = value {
             self = r#fn(self, value);
         }
