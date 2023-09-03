@@ -31,6 +31,24 @@ impl Builder {
         }
     }
 
+    /// Execute a raw SQL query and return the results.
+    ///
+    /// # Safety
+    ///
+    /// This method is unsafe because it allows for arbitrary SQL to be executed, which can lead to SQL injection.
+    /// It is recommended to build queries using the methods provided by the query builder instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails, or if a connection to the database cannot be established.
+    pub async unsafe fn raw_sql(sql: &str, bindings: Vec<Value>) -> Result<Vec<Value>, Error> {
+        let mut conn = connection::get().await?;
+
+        conn.get_values(sql, bindings)
+            .await
+            .map_err(|e| Error::Database(e.to_string()))
+    }
+
     /// Set the table which the query is targeting.
     #[must_use]
     pub fn from(mut self, table: &str) -> Self {
