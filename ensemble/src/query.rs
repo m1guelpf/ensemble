@@ -131,6 +131,26 @@ impl Builder {
         self
     }
 
+    /// Apply the callback if the given "condition" is true.
+    #[must_use]
+    pub fn when(self, condition: bool , r#fn: impl FnOnce(Self) -> Self) -> Self {
+        if condition {
+           return r#fn(self);
+        }
+        
+       self
+    }
+
+    /// Apply the callback if the given "value" is some.
+    #[must_use]
+    pub fn when_some<T>(self, value: &Option<T> , r#fn: impl FnOnce(Self, &T) -> Self) -> Self {
+        if let Some(value) = value {
+            return r#fn(self, value);
+        }
+        
+        self
+    }
+
     /// Add an inner join to the query.
     #[must_use]
     pub fn join<Op: Into<Operator>>(
