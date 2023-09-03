@@ -23,3 +23,7 @@ pub fn for_db<T: Serialize>(value: T) -> Result<rbs::Value, rbs::Error> {
 pub(crate) fn from<M: Model>(value: rbs::Value) -> Result<M, rbs::Error> {
     deserialize_value::<M>(value)
 }
+
+pub(crate) fn serializing_for_db<S: serde::Serializer>() -> bool {
+    std::any::type_name::<S::Error>() == std::any::type_name::<rbs::Error>()
+}

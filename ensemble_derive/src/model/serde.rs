@@ -55,8 +55,16 @@ pub fn impl_serialize(name: &Ident, fields: &Fields) -> syn::Result<TokenStream>
             .as_ref()
             .map_or(field.ident.clone(), |v| Ident::new(v, field.span()));
 
-        Some(quote_spanned! {field.span()=>
-            state.serialize_field(stringify!(#column), &self.#ident)?;
+        Some(if field.has_relationship() {
+            quote_spanned! {field.span()=>
+                if self.#ident.is_loaded() {
+                    state.serialize_field(stringify!(#column), &self.#ident)?;
+                }
+            }
+        } else {
+            quote_spanned! {field.span()=>
+                state.serialize_field(stringify!(#column), &self.#ident)?;
+            }
         })
     });
 

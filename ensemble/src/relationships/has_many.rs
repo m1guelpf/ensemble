@@ -4,7 +4,12 @@ use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug};
 
 use super::{find_related, Relationship, Status};
-use crate::{builder::Builder, query::Error, value, Model};
+use crate::{
+    builder::Builder,
+    query::Error,
+    value::{self, serializing_for_db},
+    Model,
+};
 
 /// ## A One to Many relationship.
 /// A one-to-many relationship is used to define relationships where a single model is the parent to one or more child models.
@@ -57,18 +62,8 @@ impl<Local: Model, Related: Model> Relationship for HasMany<Local, Related> {
         Self {
             value,
             foreign_key,
-            relation: Status::Initial,
+            relation: Status::initial(),
         }
-    }
-
-    fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
-        Related::query()
-            .r#where(
-                &format!("{}.{}", Related::TABLE_NAME, self.foreign_key),
-                "in",
-                related,
-            )
-            .where_not_null(&format!("{}.{}", Related::TABLE_NAME, self.foreign_key))
     }
 
     fn query(&self) -> Builder {
@@ -82,14 +77,32 @@ impl<Local: Model, Related: Model> Relationship for HasMany<Local, Related> {
     }
 
     /// Get the related models.
-    async fn get(&mut self) -> Result<&Self::Value, Error> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the model cannot be retrieved, or if a connection to the database cannot be established.
+    async fn get(&mut self) -> Result<&mut Self::Value, Error> {
         if self.relation.is_none() {
             let relation = self.query().get().await?;
 
             self.relation = Status::Fetched(Some(relation));
         }
 
-        Ok(self.relation.as_ref().unwrap())
+        Ok(self.relation.as_mut().unwrap())
+    }
+
+    fn is_loaded(&self) -> bool {
+        self.relation.is_loaded()
+    }
+
+    fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
+        Related::query()
+            .r#where(
+                &format!("{}.{}", Related::TABLE_NAME, self.foreign_key),
+                "in",
+                related,
+            )
+            .where_not_null(&format!("{}.{}", Related::TABLE_NAME, self.foreign_key))
     }
 
     fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
@@ -166,11 +179,15 @@ impl<Local: Model, Related: Model> Debug for HasMany<Local, Related> {
 
 impl<Local: Model, Related: Model> Serialize for HasMany<Local, Related> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        if self.value == Default::default() {
-            return serializer.serialize_none();
+        if serializing_for_db::<S>() {
+            if self.value == Default::default() {
+                return serializer.serialize_none();
+            }
+
+            return self.value.serialize(serializer);
         }
 
-        self.value.serialize(serializer)
+        self.relation.serialize(serializer)
     }
 }
 

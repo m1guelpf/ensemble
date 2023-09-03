@@ -39,11 +39,11 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
     type PrimaryKey: Display
         + DeserializeOwned
         + Serialize
-        + Send
-        + Sync
-        + Clone
         + PartialEq
-        + Default;
+        + Default
+        + Clone
+        + Send
+        + Sync;
 
     /// The name of the model.
     const NAME: &'static str;
@@ -53,9 +53,6 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
 
     /// The name of the primary key field for the model.
     const PRIMARY_KEY: &'static str;
-
-    /// Returns the names of the fields for the model.
-    fn keys() -> Vec<&'static str>;
 
     /// Returns the value of the model's primary key.
     fn primary_key(&self) -> &Self::PrimaryKey;
@@ -162,4 +159,43 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
         relation: &str,
         related: &[HashMap<String, rbs::Value>],
     ) -> Result<(), query::Error>;
+}
+
+#[async_trait]
+pub trait Collection {
+    /// Eager load a relationship for a collection of models.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the models fail to load, or if a connection to the database cannot be established.
+    async fn load<T>(&mut self, relation: T) -> Result<(), query::Error>
+    where
+        T: Into<EagerLoad> + Send + Sync + Clone;
+
+    /// Convert the collection to a JSON value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the collection cannot be converted to JSON. Since models manually implement Serialize, this should never happen.
+    #[cfg(feature = "json")]
+    fn json(&self) -> serde_json::Value;
+}
+
+#[async_trait]
+impl<T: Model> Collection for &mut Vec<T> {
+    async fn load<U>(&mut self, relation: U) -> Result<(), query::Error>
+    where
+        U: Into<EagerLoad> + Send + Sync + Clone,
+    {
+        for model in self.iter_mut() {
+            model.load(relation.clone()).await?;
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "json")]
+    fn json(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap()
+    }
 }

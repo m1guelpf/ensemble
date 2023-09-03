@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug};
 
 use super::{find_related, Relationship, Status};
-use crate::{builder::Builder, query::Error, Model};
+use crate::{builder::Builder, query::Error, value::serializing_for_db, Model};
 
 /// ## A Many to Many relationship.
 /// A many to many relationship is used to define relationships where a model is the parent of one or more child models, but can also be a child to multiple parent models.
@@ -69,25 +69,9 @@ impl<Local: Model, Related: Model> Relationship for BelongsToMany<Local, Related
             local_key,
             foreign_key,
             pivot_table,
-            relation: Status::Initial,
+            relation: Status::initial(),
             _local: std::marker::PhantomData,
         }
-    }
-
-    fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
-        Related::query()
-            .from(Related::TABLE_NAME)
-            .join(
-                &self.pivot_table,
-                &format!("{}.{}", Related::TABLE_NAME, Related::PRIMARY_KEY),
-                "=",
-                &format!("{}.{}", self.pivot_table, self.foreign_key),
-            )
-            .r#where(
-                &format!("{}.{}", self.pivot_table, self.local_key),
-                "in",
-                related,
-            )
     }
 
     fn query(&self) -> Builder {
@@ -106,15 +90,34 @@ impl<Local: Model, Related: Model> Relationship for BelongsToMany<Local, Related
             )
     }
 
-    /// Get the related model.
-    async fn get(&mut self) -> Result<&Self::Value, Error> {
+    async fn get(&mut self) -> Result<&mut Self::Value, Error> {
         if self.relation.is_none() {
             let relation = self.query().get().await?;
 
             self.relation = Status::Fetched(Some(relation));
         }
 
-        Ok(self.relation.as_ref().unwrap())
+        Ok(self.relation.as_mut().unwrap())
+    }
+
+    fn is_loaded(&self) -> bool {
+        self.relation.is_loaded()
+    }
+
+    fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
+        Related::query()
+            .from(Related::TABLE_NAME)
+            .join(
+                &self.pivot_table,
+                &format!("{}.{}", Related::TABLE_NAME, Related::PRIMARY_KEY),
+                "=",
+                &format!("{}.{}", self.pivot_table, self.foreign_key),
+            )
+            .r#where(
+                &format!("{}.{}", self.pivot_table, self.local_key),
+                "in",
+                related,
+            )
     }
 
     fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
@@ -136,11 +139,15 @@ impl<Local: Model, Related: Model> Debug for BelongsToMany<Local, Related> {
 
 impl<Local: Model, Related: Model> Serialize for BelongsToMany<Local, Related> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        if self.value == Default::default() {
-            return serializer.serialize_none();
+        if serializing_for_db::<S>() {
+            if self.value == Default::default() {
+                return serializer.serialize_none();
+            }
+
+            return self.value.serialize(serializer);
         }
 
-        self.value.serialize(serializer)
+        self.relation.serialize(serializer)
     }
 }
 

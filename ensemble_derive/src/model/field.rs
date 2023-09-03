@@ -250,16 +250,6 @@ impl Fields {
         })
     }
 
-    pub fn keys(&self) -> Vec<&Ident> {
-        let mut keys = vec![];
-
-        for field in &self.fields {
-            keys.push(&field.ident);
-        }
-
-        keys
-    }
-
     pub fn relationships(&self) -> Vec<&Field> {
         self.fields
             .iter()

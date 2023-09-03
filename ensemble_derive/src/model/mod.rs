@@ -38,7 +38,6 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
     let fields = Fields::try_from(struct_fields.clone())?;
     let primary_key = fields.primary_key()?;
 
-    let keys_impl = impl_keys(&fields);
     let find_impl = impl_find(primary_key);
     let fresh_impl = impl_fresh(primary_key);
     let eager_load_impl = impl_eager_load(&fields);
@@ -63,7 +62,6 @@ pub fn r#impl(ast: &DeriveInput, opts: Opts) -> syn::Result<proc_macro2::TokenSt
                 const NAME: &'static str = stringify!(#name);
 
                 #save_impl
-                #keys_impl
                 #find_impl
                 #fresh_impl
                 #create_impl
@@ -153,7 +151,8 @@ fn impl_relationships(name: &Ident, fields: &Fields) -> syn::Result<TokenStream>
         };
 
         quote_spanned! {f.span() =>
-            pub async fn #ident(&mut self) -> Result<&#return_type, ::ensemble::query::Error> {
+            #[allow(dead_code)]
+            pub async fn #ident(&mut self) -> Result<&mut #return_type, ::ensemble::query::Error> {
                 self.#ident.get().await
             }
         }
@@ -301,18 +300,6 @@ fn impl_primary_key(primary_key: &Field) -> TokenStream {
 
         fn primary_key(&self) -> &Self::PrimaryKey {
             &self.#ident
-        }
-    }
-}
-
-fn impl_keys(fields: &Fields) -> TokenStream {
-    let keys = fields.keys();
-
-    quote! {
-        fn keys() -> Vec<&'static str> {
-            vec![
-                #(stringify!(#keys),)*
-            ]
         }
     }
 }

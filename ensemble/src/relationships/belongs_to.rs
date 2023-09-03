@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::{collections::HashMap, fmt::Debug};
 
 use super::{find_related, Relationship, Status};
-use crate::{builder::Builder, query::Error, Model};
+use crate::{builder::Builder, query::Error, value::serializing_for_db, Model};
 
 /// ## A Belongs To relationship.
 /// A belongs to relationship is used to define relationships where a model is the child to a single models. For example, a website may belong to a user.
@@ -54,19 +54,9 @@ impl<Local: Model, Related: Model> Relationship for BelongsTo<Local, Related> {
         Self {
             value,
             local_key,
-            relation: Status::Initial,
+            relation: Status::initial(),
             _local: std::marker::PhantomData,
         }
-    }
-
-    fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
-        Related::query()
-            .r#where(
-                &format!("{}.{}", Related::TABLE_NAME, self.local_key),
-                "in",
-                related,
-            )
-            .limit(1)
     }
 
     fn query(&self) -> Builder {
@@ -80,14 +70,28 @@ impl<Local: Model, Related: Model> Relationship for BelongsTo<Local, Related> {
     }
 
     /// Get the related model.
-    async fn get(&mut self) -> Result<&Self::Value, Error> {
+    async fn get(&mut self) -> Result<&mut Self::Value, Error> {
         if self.relation.is_none() {
             let relation = self.query().first().await?.ok_or(Error::NotFound)?;
 
             self.relation = Status::Fetched(Some(relation));
         }
 
-        Ok(self.relation.as_ref().unwrap())
+        Ok(self.relation.as_mut().unwrap())
+    }
+
+    fn is_loaded(&self) -> bool {
+        self.relation.is_loaded()
+    }
+
+    fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
+        Related::query()
+            .r#where(
+                &format!("{}.{}", Related::TABLE_NAME, self.local_key),
+                "in",
+                related,
+            )
+            .limit(1)
     }
 
     fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
@@ -107,11 +111,15 @@ impl<Local: Model, Related: Model> Debug for BelongsTo<Local, Related> {
 
 impl<Local: Model, Related: Model> Serialize for BelongsTo<Local, Related> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        if self.value == Default::default() {
-            return serializer.serialize_none();
+        if serializing_for_db::<S>() {
+            if self.value == Default::default() {
+                return serializer.serialize_none();
+            }
+
+            return self.value.serialize(serializer);
         }
 
-        self.value.serialize(serializer)
+        self.relation.serialize(serializer)
     }
 }
 

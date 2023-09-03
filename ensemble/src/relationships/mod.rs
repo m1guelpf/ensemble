@@ -6,8 +6,8 @@ mod belongs_to_many;
 mod has_many;
 mod has_one;
 
-use std::collections::HashMap;
 use std::ops::Deref;
+use std::{collections::HashMap, ops::DerefMut};
 
 use crate::{builder::Builder, query::Error, value, Model};
 
@@ -34,7 +34,10 @@ pub trait Relationship {
     /// # Errors
     ///
     /// Returns an error if the model cannot be retrieved, or if a connection to the database cannot be established.
-    async fn get(&mut self) -> Result<&Self::Value, Error>;
+    async fn get(&mut self) -> Result<&mut Self::Value, Error>;
+
+    /// Whether the relationship has been loaded.
+    fn is_loaded(&self) -> bool;
 
     /// Get the query builder for the relationship.
     ///
@@ -43,28 +46,42 @@ pub trait Relationship {
     /// Returns an error if serialization fails when building the query.
     fn query(&self) -> Builder;
 
-    /// Get the query builder for eager loading the relationship. Not intended to be used directly.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if serialization fails when building the query.
     #[doc(hidden)]
+    /// Get the query builder for eager loading the relationship. Not intended to be used directly.
     fn eager_query(&self, related: Vec<Self::Key>) -> Builder;
 
-    /// Match the eagerly loaded results to their parents. Not intended to be used directly.
     #[doc(hidden)]
+    /// Match the eagerly loaded results to their parents. Not intended to be used directly.
     fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error>;
 
-    /// Create an instance of the relationship. Not intended to be used directly.
     #[doc(hidden)]
+    /// Create an instance of the relationship. Not intended to be used directly.
     fn build(value: Self::Key, related_key: Self::RelatedKey) -> Self;
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Status<T> {
-    #[default]
-    Initial,
+    Initial(Option<T>),
     Fetched(Option<T>),
+}
+
+impl<T> Status<T> {
+    const fn initial() -> Self {
+        Self::Initial(None)
+    }
+
+    const fn is_loaded(&self) -> bool {
+        match self {
+            Self::Initial(_) => false,
+            Self::Fetched(_) => true,
+        }
+    }
+}
+
+impl<T> Default for Status<T> {
+    fn default() -> Self {
+        Self::initial()
+    }
 }
 
 impl<T> Deref for Status<T> {
@@ -72,8 +89,24 @@ impl<T> Deref for Status<T> {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            Self::Initial => &None,
-            Self::Fetched(value) => value,
+            Self::Initial(value) | Self::Fetched(value) => value,
+        }
+    }
+}
+
+impl<T> DerefMut for Status<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            Self::Initial(value) | Self::Fetched(value) => value,
+        }
+    }
+}
+
+impl<T: serde::Serialize> serde::Serialize for Status<T> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Initial(_) | Self::Fetched(None) => serializer.serialize_none(),
+            Self::Fetched(Some(ref value)) => value.serialize(serializer),
         }
     }
 }
