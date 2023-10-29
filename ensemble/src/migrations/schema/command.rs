@@ -12,6 +12,7 @@ pub struct Command {
     pub(crate) post_sql: Option<String>,
 }
 
+/// A foreign key constraint.
 #[derive(Debug, Clone, Column)]
 #[allow(dead_code)]
 pub struct ForeignIndex {
@@ -19,13 +20,18 @@ pub struct ForeignIndex {
     column: String,
     #[builder(init)]
     origin_table: String,
+    /// The name of the foreign index.
     name: Option<String>,
+    /// The name of the column in the foreign table.
     #[builder(rename = "references")]
     foreign_column: Option<String>,
+    /// The name of the foreign table.
     #[builder(rename = "on")]
     table: String,
+    /// The action to take when the foreign row is deleted.
     #[builder(into)]
     on_delete: Option<OnAction>,
+    /// The action to take when the foreign row is updated.
     #[builder(into)]
     on_update: Option<OnAction>,
 

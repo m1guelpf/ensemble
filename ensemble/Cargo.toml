@@ -34,7 +34,7 @@ rbatis = { version = "4.3.12", default-features = false, features = [
 axum = "0.6.20"
 
 [features]
-default = ["native-tls", "json", "schema", "uuid"]
+default = ["rustls", "json", "schema", "uuid"]
 
 schema = ["dep:schemars"]
 mysql = ["dep:rbdc-mysql"]
@@ -47,3 +47,7 @@ native-tls = [
     "rbdc-pg?/tls-native-tls",
     "rbdc-mysql?/tls-native-tls",
 ]
+
+
+[package.metadata.docs.rs]
+features = ["mysql", "postgres"]

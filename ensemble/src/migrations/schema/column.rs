@@ -5,7 +5,10 @@ use rbs::Value;
 use std::{fmt::Display, sync::mpsc};
 
 use super::Schemable;
-use crate::{connection, value};
+use crate::{
+    connection::{self, Database},
+    value,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
@@ -16,8 +19,7 @@ pub enum Type {
     Timestamp,
     BigInteger,
     String(u32),
-    #[cfg(feature = "mysql")]
-    Enum(Vec<String>),
+    Enum(String, Vec<String>),
 }
 
 impl Display for Type {
@@ -33,15 +35,23 @@ impl Display for Type {
                 let value = format!("varchar({size})");
                 f.write_str(&value)
             }
-            #[cfg(feature = "mysql")]
-            Self::Enum(values) => {
-                let value = format!(
-                    "enum({})",
-                    values
-                        .iter()
-                        .map(|v| format!("'{}'", v.replace('\'', "\\'")))
-                        .join(", ")
-                );
+            Self::Enum(name, values) => {
+                let value = match connection::which_db() {
+                    Database::MySQL => format!(
+                        "enum({})",
+                        values
+                            .iter()
+                            .map(|v| format!("'{}'", v.replace('\'', "\\'")))
+                            .join(", ")
+                    ),
+                    Database::PostgreSQL => format!(
+                        "varchar(255) check({name} in ({}))",
+                        values
+                            .iter()
+                            .map(|v| format!("'{}'", v.replace('\'', "\\'")))
+                            .join(", ")
+                    ),
+                };
                 f.write_str(&value)
             }
         }
@@ -58,6 +68,7 @@ pub struct Column {
     /// The type of the column.
     #[builder(init)]
     r#type: Type,
+    #[cfg(feature = "mysql")]
     /// Place the column "after" another column
     after: Option<String>,
     /// Set INTEGER columns as auto-increment (primary key)
@@ -79,6 +90,8 @@ pub struct Column {
     primary: bool,
     /// Add a unique index
     unique: bool,
+    /// Specify a "collation" for the column
+    collation: Option<String>,
     /// Set the INTEGER column as UNSIGNED
     #[cfg(feature = "mysql")]
     #[builder(type = Type::BigInteger)]
@@ -105,8 +118,7 @@ impl Column {
             value::for_db(default).unwrap()
         };
 
-        #[cfg(feature = "mysql")]
-        if let Type::Enum(values) = &self.r#type {
+        if let Type::Enum(_, values) = &self.r#type {
             assert!(
                 values.contains(&value.as_str().unwrap_or_default().to_string()),
                 "default value must be one of the enum values"
@@ -141,12 +153,17 @@ impl Column {
             sql.push_str(" NOT NULL");
         }
 
+        #[cfg(feature = "mysql")]
         if let Some(after) = &self.after {
             sql.push_str(&format!(" AFTER {after}"));
         }
 
         if let Some(comment) = &self.comment {
             sql.push_str(&format!(" COMMENT {comment}"));
+        }
+
+        if let Some(collation) = &self.collation {
+            sql.push_str(&format!(" COLLATE {collation}"));
         }
 
         if let Some(default) = &self.default {

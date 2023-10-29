@@ -11,6 +11,7 @@ use crate::{
 
 pub static MIGRATE_CONN: Mutex<Option<Connection>> = Mutex::const_new(None);
 
+/// The migration runner.
 pub struct Migrator {
     batch: u64,
     connection: Connection,
@@ -48,6 +49,7 @@ impl Migrator {
         })
     }
 
+    /// Registers a migration.
     pub fn register(&mut self, name: String, migration: Box<dyn Migration>) {
         tracing::trace!("Registered migration [{name}]");
 
@@ -142,7 +144,7 @@ impl Migrator {
         Ok(())
     }
 
-    /// Rolls back all of the migrations.
+    /// Rolls back the last `n` batches of migrations.
     ///
     /// # Errors
     ///

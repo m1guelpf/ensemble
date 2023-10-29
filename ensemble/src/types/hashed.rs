@@ -5,7 +5,7 @@ use std::{fmt::Debug, ops::Deref};
 /// A wrapper around a value that has been hashed with SHA-256.
 #[derive(Clone, Eq, Default)]
 pub struct Hashed<T: Sha256Digest> {
-    value: String,
+    hash: String,
     _marker: std::marker::PhantomData<T>,
 }
 
@@ -21,7 +21,7 @@ impl<T: Sha256Digest> Hashed<T> {
     /// ```
     pub fn new(value: T) -> Self {
         Self {
-            value: digest(value),
+            hash: digest(value),
             _marker: std::marker::PhantomData,
         }
     }
@@ -31,7 +31,7 @@ impl<T: Sha256Digest> Deref for Hashed<T> {
     type Target = String;
 
     fn deref(&self) -> &Self::Target {
-        &self.value
+        &self.hash
     }
 }
 
@@ -43,37 +43,37 @@ impl<T: Sha256Digest> From<T> for Hashed<T> {
 
 impl<T: Sha256Digest> From<Hashed<T>> for String {
     fn from(val: Hashed<T>) -> Self {
-        val.value
+        val.hash
     }
 }
 
 impl<T: Sha256Digest> Debug for Hashed<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.value.fmt(f)
+        self.hash.fmt(f)
     }
 }
 
 impl<T: Sha256Digest> PartialEq for Hashed<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
+        self.hash == other.hash
     }
 }
 
 impl<T: Sha256Digest> PartialEq<String> for Hashed<T> {
     fn eq(&self, other: &String) -> bool {
-        self.value == digest(other)
+        self.hash == digest(other)
     }
 }
 
 impl<T: Sha256Digest> PartialEq<&str> for Hashed<T> {
     fn eq(&self, other: &&str) -> bool {
-        self.value == digest(*other)
+        self.hash == digest(*other)
     }
 }
 
 impl<T: Sha256Digest> Serialize for Hashed<T> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.value.serialize(serializer)
+        self.hash.serialize(serializer)
     }
 }
 
@@ -81,15 +81,8 @@ impl<'de, T: Sha256Digest> Deserialize<'de> for Hashed<T> {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Ok(Self {
             _marker: std::marker::PhantomData,
-            value: String::deserialize(deserializer)?,
+            hash: String::deserialize(deserializer)?,
         })
-    }
-}
-
-#[cfg(feature = "validator")]
-impl<T: Sha256Digest> validator::HasLen for &Hashed<T> {
-    fn length(&self) -> u64 {
-        self.value.len() as u64
     }
 }
 

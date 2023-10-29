@@ -158,7 +158,7 @@ pub fn impl_deserialize(name: &Ident, fields: &Fields) -> syn::Result<TokenStrea
 fn field_deserialize(column: &Rc<[Ident]>, enum_key: &Rc<[Ident]>) -> TokenStream {
     let expecting_str = column
         .iter()
-        .map(|f| format!("`{}`", f.to_string()))
+        .map(|f| format!("`{f}`"))
         .collect::<Rc<_>>()
         .join(" or ");
 

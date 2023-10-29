@@ -160,6 +160,19 @@ impl Builder {
         self
     }
 
+    /// Add a "where is null" clause to the query.
+    #[must_use]
+    pub fn where_null(mut self, column: &str) -> Self {
+        self.r#where.push(WhereClause::Simple(Where {
+            value: None,
+            boolean: Boolean::And,
+            column: column.to_string(),
+            operator: Operator::IsNull,
+        }));
+
+        self
+    }
+
     /// Add an inner join to the query.
     #[must_use]
     pub fn join<Op: Into<Operator>>(
@@ -407,7 +420,7 @@ impl Builder {
                 self.table,
                 values
                     .iter()
-                    .map(|(column, _)| format!("{} = ?", column))
+                    .map(|(column, _)| format!("{column} = ?"))
                     .join(", "),
                 self.to_sql(Type::Update)
             ),

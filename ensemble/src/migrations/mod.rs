@@ -8,26 +8,35 @@ pub use {migrator::Migrator, schema::Schema};
 
 #[cfg(any(feature = "mysql", feature = "postgres"))]
 mod migrator;
-#[cfg(any(feature = "mysql", feature = "postgres"))]
-mod schema;
 
+#[cfg(any(feature = "mysql", feature = "postgres"))]
+/// The migration schema.
+pub mod schema;
+
+/// Errors that can occur while running migrations.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// An error occurred while connecting to the database.
     #[error("Failed to connect to database.")]
     Connection(#[from] ConnectError),
 
+    /// An error occurred while running a migration.
     #[error("{0}")]
     Database(String),
 
+    /// The migration could not be found.
     #[error("Could not locate the {0} migration.")]
     NotFound(String),
 
+    /// There was an internal error with the migrations system.
     #[error("Failed to receive column in schema.")]
     SendColumn,
 
+    /// One of the migrations locked the connection.
     #[error("Failed to obtain connection")]
     Lock,
 
+    /// The migration data could not be decoded.
     #[error("Failed to deserialize migration data.")]
     Decode(#[from] rbs::Error),
 }
