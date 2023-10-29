@@ -1,5 +1,4 @@
 use ensemble_derive::Column;
-#[cfg(feature = "mysql")]
 use itertools::Itertools;
 use rbs::Value;
 use std::{fmt::Display, sync::mpsc};
