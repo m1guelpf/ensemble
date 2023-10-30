@@ -160,6 +160,22 @@ impl Builder {
         self
     }
 
+    // Add a "where in" clause to the query.
+    #[must_use]
+    pub fn where_in<T>(mut self, column: &str, values: Vec<T>) -> Self
+    where
+        T: Into<Value>,
+    {
+        self.r#where.push(WhereClause::Simple(Where {
+            boolean: Boolean::And,
+            operator: Operator::In,
+            column: column.to_string(),
+            value: Some(Value::Array(values.into_iter().map(Into::into).collect())),
+        }));
+
+        self
+    }
+
     /// Add a "where is null" clause to the query.
     #[must_use]
     pub fn where_null(mut self, column: &str) -> Self {
