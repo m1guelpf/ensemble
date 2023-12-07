@@ -31,7 +31,7 @@ pub enum SetupError {
 ///
 /// Returns an error if the database pool has already been initialized, or if the provided database URL is invalid.
 #[cfg(any(feature = "mysql", feature = "postgres"))]
-pub async fn setup(database_url: &str) -> Result<(), SetupError> {
+pub async fn setup(database_url: &str, role: Option<&str>) -> Result<(), SetupError> {
     let rb = RBatis::new();
 
     #[cfg(feature = "mysql")]
@@ -50,6 +50,9 @@ pub async fn setup(database_url: &str) -> Result<(), SetupError> {
     #[cfg(feature = "postgres")]
     rb.link(PgDriver {}, database_url).await?;
 
+    if let Some(r) = role {
+        // TODO: Assign role to the connection pool
+    }
     DB_POOL
         .set(rb)
         .map_err(|_| SetupError::AlreadyInitialized)?;
@@ -77,7 +80,11 @@ pub enum ConnectError {
 pub async fn get() -> Result<Connection, ConnectError> {
     match DB_POOL.get() {
         None => Err(ConnectError::NotInitialized),
-        Some(rb) => Ok(rb.get_pool()?.get().await?),
+        Some(rb) => {
+            let conn = rb.get_pool()?.get().await?;
+            // TODO: Insert call to `assume_role` here, if `role` is provided
+            Ok(conn)
+        },
     }
 }
 
