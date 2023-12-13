@@ -111,6 +111,7 @@ fn impl_eager_load(fields: &Fields) -> TokenStream {
     });
 
     quote! {
+        #[allow(clippy::cloned_instead_of_copied)]
         fn eager_load(&self, relation: &str, related: &[&Self]) -> ::ensemble::query::Builder {
             match relation {
                 #(#eager_loads)*
