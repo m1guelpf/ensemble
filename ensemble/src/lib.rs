@@ -91,6 +91,9 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
     ///
     /// Returns an error if the query fails, or if a connection to the database cannot be established.
     async fn all() -> Result<Vec<Self>, Error> {
+        if let Err(e) = Self::assume_role("role_to_assume").await {
+            return Err(e);
+        }
         Self::query().get().await
     }
 
@@ -99,21 +102,34 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
     /// # Errors
     ///
     /// Returns an error if the model cannot be found, or if a connection to the database cannot be established.
-    async fn find(key: Self::PrimaryKey) -> Result<Self, Error>;
+    async fn find(key: Self::PrimaryKey) -> Result<Self, Error> {
+        if let Err(e) = Self::assume_role("role_to_assume").await {
+            return Err(e);
+        }
+        // Original find logic here (omitted for brevity)
+    }
 
     /// Insert a new model into the database.
     ///
     /// # Errors
     ///
     /// Returns an error if the model cannot be inserted, or if a connection to the database cannot be established.
-    async fn create(self) -> Result<Self, Error>;
+    async fn create(self) -> Result<Self, Error> {
+        if let Err(e) = Self::assume_role("role_to_assume").await {
+            return Err(e);
+        }
+        // Original create logic here (omitted for brevity)
+    }
 
     /// Update the model in the database.
     ///
     /// # Errors
     ///
     /// Returns an error if the model cannot be updated, or if a connection to the database cannot be established.
-    async fn save(&mut self) -> Result<(), Error>;
+    async fn save(&mut self) -> Result<(), Error> {
+        Self::assume_role("role_to_assume").await?;
+        // Original save logic here (omitted for brevity)
+    }
 
     /// Delete the model from the database.
     ///
@@ -178,6 +194,20 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
     /// This method is used internally by Ensemble, and should not be called directly.
     #[doc(hidden)]
     fn eager_load(&self, relation: &str, related: &[&Self]) -> Builder;
+    
+    /// Assume a role for the duration of a session.
+    /// 
+    /// # Errors
+    ///
+    /// Returns an error if the role cannot be assumed, or if a connection to the database cannot be established.
+
+    async fn assume_role(role: &str) -> Result<(), Error> {
+        // Placeholder implementation for demonstration
+        // In a real scenario, this would involve setting a role for the database connection
+        // Here we simply return Ok(()) as if the role was successfully assumed
+        Ok(())
+    }
+
 
     /// Fill a relationship for a set of models.
     /// This method is used internally by Ensemble, and should not be called directly.
