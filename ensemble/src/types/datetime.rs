@@ -4,7 +4,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Add, Deref, DerefMut, Sub};
 use std::str::FromStr;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 /// A date and time value, used for storing timestamps in the database.
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -89,48 +89,6 @@ impl DateTime {
     }
 
     #[must_use]
-    pub fn set_micro(mut self, micro: u32) -> Self {
-        self.0 = self.0.set_micro(micro);
-        self
-    }
-
-    #[must_use]
-    pub fn set_sec(mut self, sec: u8) -> Self {
-        self.0 = self.0.set_sec(sec);
-        self
-    }
-
-    #[must_use]
-    pub fn set_min(mut self, min: u8) -> Self {
-        self.0 = self.0.set_min(min);
-        self
-    }
-
-    #[must_use]
-    pub fn set_hour(mut self, hour: u8) -> Self {
-        self.0 = self.0.set_hour(hour);
-        self
-    }
-
-    #[must_use]
-    pub fn set_day(mut self, day: u8) -> Self {
-        self.0 = self.0.set_day(day);
-        self
-    }
-
-    #[must_use]
-    pub fn set_mon(mut self, mon: u8) -> Self {
-        self.0 = self.0.set_mon(mon);
-        self
-    }
-
-    #[must_use]
-    pub fn set_year(mut self, year: u16) -> Self {
-        self.0 = self.0.set_year(year);
-        self
-    }
-
-    #[must_use]
     pub fn from_timestamp(sec: i64) -> Self {
         Self(fastdate::DateTime::from_timestamp(sec))
     }
@@ -143,6 +101,11 @@ impl DateTime {
     #[must_use]
     pub fn from_timestamp_nano(nano: i128) -> Self {
         Self(fastdate::DateTime::from_timestamp_nano(nano))
+    }
+
+    #[must_use]
+    pub fn from_system_time(s: SystemTime, offset: i32) -> Self {
+        Self(fastdate::DateTime::from_system_time(s, offset))
     }
 }
 
@@ -180,6 +143,12 @@ impl FromStr for DateTime {
     }
 }
 
+impl Default for DateTime {
+    fn default() -> Self {
+        Self(fastdate::DateTime::from_timestamp(0))
+    }
+}
+
 impl From<DateTime> for Value {
     fn from(arg: DateTime) -> Self {
         Self::Ext("DateTime", Box::new(Self::String(arg.0.to_string())))
@@ -203,5 +172,82 @@ impl schemars::JsonSchema for DateTime {
             ..Default::default()
         }
         .into()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_ser_de() {
+        let dt = DateTime::now();
+        let v = serde_json::to_value(&dt).unwrap();
+        let new_dt: DateTime = serde_json::from_value(v).unwrap();
+        assert_eq!(new_dt, dt);
+    }
+
+    #[test]
+    fn test_de() {
+        let dt = DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap();
+        println!("dt={}", dt);
+        let v = serde_json::to_value(&dt).unwrap();
+        let new_dt: DateTime = serde_json::from_value(v).unwrap();
+        assert_eq!(new_dt, dt);
+    }
+
+    #[test]
+    fn test_de2() {
+        let dt = vec![DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap()];
+        let v = serde_json::to_value(&dt).unwrap();
+        println!("dt={:?}", dt);
+        let new_dt: Vec<DateTime> = serde_json::from_value(v).unwrap();
+        assert_eq!(new_dt, dt);
+    }
+
+    #[test]
+    fn test_de3() {
+        let dt = vec![DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap()];
+        let v = rbs::to_value!(&dt);
+        let new_dt: Vec<DateTime> = rbs::from_value(v).unwrap();
+        assert_eq!(new_dt, dt);
+    }
+
+    #[test]
+    fn test_de4() {
+        let dt = DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap();
+        let v = rbs::to_value!(&dt.unix_timestamp_millis());
+        let new_dt: DateTime = rbs::from_value(v).unwrap();
+        assert_eq!(
+            new_dt,
+            DateTime::from_str("2023-10-20T16:15:00.923Z").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_de5() {
+        let dt = DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap();
+        let v = serde_json::to_value(&dt.unix_timestamp_millis()).unwrap();
+        let new_dt: DateTime = serde_json::from_value(v).unwrap();
+        assert_eq!(
+            new_dt,
+            DateTime::from_str("2023-10-20T16:15:00.923Z").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_default() {
+        let dt = DateTime::default();
+        println!("{}", dt);
+        assert_eq!(dt.to_string(), "DateTime(1970-01-01T00:00:00Z)");
+    }
+
+    #[test]
+    fn test_format() {
+        let dt = DateTime::default();
+        let s = dt.format("YYYY-MM-DD/hh/mm/ss");
+        println!("{}", s);
+        assert_eq!(s, "1970-1-1/0/0/0");
     }
 }
