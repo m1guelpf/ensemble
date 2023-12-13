@@ -34,7 +34,6 @@ pub struct Post {
 #[tokio::main]
 async fn main() {
     ensemble::setup(&env::var("DATABASE_URL").expect("DATABASE_URL must be set"))
-        .await
         .expect("Failed to set up database pool.");
 
     let mut user = User::find(1).await.expect("Failed to find user.");

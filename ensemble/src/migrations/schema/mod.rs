@@ -75,13 +75,10 @@ impl Schema {
         let mut conn_lock = MIGRATE_CONN.try_lock().map_err(|_| Error::Lock)?;
         let mut conn = conn_lock.take().ok_or(Error::Lock)?;
 
-        let (sql, bindings) = (
-            format!("DROP TABLE ?"),
-            vec![Value::String(table_name.to_string())],
-        );
+        let (sql, bindings) = ("DROP TABLE ?", vec![Value::String(table_name.to_string())]);
 
-        tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Running DROP TABLE SQL query");
-        let query_result = conn.exec(&sql, bindings).await;
+        tracing::debug!(sql = sql, bindings = ?bindings, "Running DROP TABLE SQL query");
+        let query_result = conn.exec(sql, bindings).await;
 
         conn_lock.replace(conn);
         drop(conn_lock);
@@ -142,7 +139,7 @@ impl Table {
 
         #[cfg(feature = "mysql")]
         {
-            return column.unsigned(true);
+            column.unsigned(true)
         }
 
         #[cfg(not(feature = "mysql"))]

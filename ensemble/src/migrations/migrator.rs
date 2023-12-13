@@ -50,12 +50,17 @@ impl Migrator {
     }
 
     /// Registers a migration.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a migration with the same name has already been registered.
     pub fn register(&mut self, name: String, migration: Box<dyn Migration>) {
         tracing::trace!("Registered migration [{name}]");
 
-        if self.migrations.iter().any(|(n, _)| n == &name) {
-            panic!("A migration with the name [{name}] has already been registered.");
-        }
+        assert!(
+            !self.migrations.iter().any(|(n, _)| n == &name),
+            "A migration with the name [{name}] has already been registered."
+        );
 
         self.migrations.push((name, migration));
     }
@@ -122,7 +127,7 @@ impl Migrator {
             self.connection
                 .exec(
                     "insert into migrations (migration, batch) values (?, ?)",
-                    vec![value::for_db(&name)?, value::for_db(&self.batch)?],
+                    vec![value::for_db(name)?, value::for_db(self.batch)?],
                 )
                 .await
                 .map_err(|e| Error::Database(e.to_string()))?;
@@ -160,8 +165,7 @@ impl Migrator {
             let (name, migration) = self
                 .migrations
                 .iter()
-                .filter(|(name, _)| name == &record.migration)
-                .next()
+                .find(|(name, _)| name == &record.migration)
                 .ok_or_else(|| Error::NotFound(record.migration.clone()))?;
 
             self.connection
@@ -238,7 +242,7 @@ pub struct StoredMigration {
     pub migration: String,
 }
 
-fn migrations_table_query() -> &'static str {
+const fn migrations_table_query() -> &'static str {
     use crate::connection::Database;
 
     match connection::which_db() {
