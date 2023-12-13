@@ -1,10 +1,11 @@
-use rbatis::{rbdc::db::Connection as RbdcConnection, DefaultPool, RBatis};
+use rbatis::{rbdc::db::Connection as RbdcConnection, RBatis};
 #[cfg(feature = "mysql")]
 use rbdc_mysql::{driver::MysqlDriver, options::MySqlConnectOptions};
 #[cfg(feature = "postgres")]
-use rbdc_pg::driver::PgDriver;
-use std::str::FromStr;
+use rbdc_pg::{driver::PgDriver, options::PgConnectOptions};
 use std::sync::OnceLock;
+#[cfg(any(feature = "mysql", feature = "postgres"))]
+use {rbatis::DefaultPool, std::str::FromStr};
 
 pub type Connection = Box<dyn RbdcConnection>;
 
@@ -26,7 +27,7 @@ pub enum SetupError {
 ///
 /// Returns an error if the database pool has already been initialized, or if the provided database URL is invalid.
 #[cfg(any(feature = "mysql", feature = "postgres"))]
-pub async fn setup(database_url: &str) -> Result<(), SetupError> {
+pub fn setup(database_url: &str) -> Result<(), SetupError> {
     let rb = RBatis::new();
 
     #[cfg(feature = "mysql")]
@@ -48,9 +49,8 @@ pub async fn setup(database_url: &str) -> Result<(), SetupError> {
     #[cfg(feature = "postgres")]
     rb.init_option::<PgDriver, PgConnectOptions, DefaultPool>(
         PgDriver {},
-        PgConnectOptions::from_str(database_url),
-    )
-    .await?;
+        PgConnectOptions::from_str(database_url)?,
+    )?;
 
     DB_POOL
         .set(rb)
@@ -88,12 +88,12 @@ pub enum Database {
 
 #[cfg(any(feature = "mysql", feature = "postgres"))]
 impl Database {
-    pub fn is_mysql(&self) -> bool {
-        matches!(self, Database::MySQL)
+    pub const fn is_mysql(&self) -> bool {
+        matches!(self, Self::MySQL)
     }
 
-    pub fn is_postgres(&self) -> bool {
-        matches!(self, Database::PostgreSQL)
+    pub const fn is_postgres(&self) -> bool {
+        matches!(self, Self::PostgreSQL)
     }
 }
 

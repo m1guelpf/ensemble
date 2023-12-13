@@ -169,7 +169,7 @@ impl Column {
             if self.r#type == Type::Json {
                 sql.push_str(&format!(" DEFAULT '{}'", default.as_str().unwrap()));
             } else {
-                sql.push_str(&format!(" DEFAULT {}", default));
+                sql.push_str(&format!(" DEFAULT {default}"));
             }
         }
 

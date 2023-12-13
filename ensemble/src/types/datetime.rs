@@ -191,7 +191,7 @@ mod test {
     #[test]
     fn test_de() {
         let dt = DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap();
-        println!("dt={}", dt);
+
         let v = serde_json::to_value(&dt).unwrap();
         let new_dt: DateTime = serde_json::from_value(v).unwrap();
         assert_eq!(new_dt, dt);
@@ -201,7 +201,7 @@ mod test {
     fn test_de2() {
         let dt = vec![DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap()];
         let v = serde_json::to_value(&dt).unwrap();
-        println!("dt={:?}", dt);
+
         let new_dt: Vec<DateTime> = serde_json::from_value(v).unwrap();
         assert_eq!(new_dt, dt);
     }
@@ -228,7 +228,7 @@ mod test {
     #[test]
     fn test_de5() {
         let dt = DateTime::from_str("2023-10-21T00:15:00.9233333+08:00").unwrap();
-        let v = serde_json::to_value(&dt.unix_timestamp_millis()).unwrap();
+        let v = serde_json::to_value(dt.unix_timestamp_millis()).unwrap();
         let new_dt: DateTime = serde_json::from_value(v).unwrap();
         assert_eq!(
             new_dt,
@@ -239,7 +239,7 @@ mod test {
     #[test]
     fn test_default() {
         let dt = DateTime::default();
-        println!("{}", dt);
+
         assert_eq!(dt.to_string(), "DateTime(1970-01-01T00:00:00Z)");
     }
 
@@ -247,7 +247,7 @@ mod test {
     fn test_format() {
         let dt = DateTime::default();
         let s = dt.format("YYYY-MM-DD/hh/mm/ss");
-        println!("{}", s);
+
         assert_eq!(s, "1970-1-1/0/0/0");
     }
 }
