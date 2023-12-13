@@ -74,6 +74,10 @@ impl<Local: Model, Related: Model> Relationship for HasMany<Local, Related> {
 			.where_not_null(&format!("{}.{}", Related::TABLE_NAME, self.foreign_key))
 	}
 
+	fn peek(&self) -> Option<&Self::Value> {
+		self.relation.as_ref()
+	}
+
 	/// Get the related models.
 	///
 	/// # Errors

@@ -79,6 +79,10 @@ impl<Local: Model, Related: Model> Relationship for HasOne<Local, Related> {
 		Ok(self.relation.as_mut().unwrap())
 	}
 
+	fn peek(&self) -> Option<&Self::Value> {
+		self.relation.as_ref()
+	}
+
 	fn is_loaded(&self) -> bool {
 		self.relation.is_loaded()
 	}

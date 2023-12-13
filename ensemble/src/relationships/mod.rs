@@ -38,6 +38,10 @@ pub trait Relationship {
 	/// Returns an error if the model cannot be retrieved, or if a connection to the database cannot be established.
 	fn get(&mut self) -> impl Future<Output = Result<&mut Self::Value, Error>> + Send;
 
+	/// Peek at the related model.
+	/// Returns `None` if the relationship has not been loaded, or if the relationship is empty. Returns `Some` if the relationship has been loaded.
+	fn peek(&self) -> Option<&Self::Value>;
+
 	/// Whether the relationship has been loaded.
 	fn is_loaded(&self) -> bool;
 
@@ -61,7 +65,7 @@ pub trait Relationship {
 	fn build(value: Self::Key, related_key: Self::RelatedKey) -> Self;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Status<T> {
 	Initial(Option<T>),
 	Fetched(Option<T>),
