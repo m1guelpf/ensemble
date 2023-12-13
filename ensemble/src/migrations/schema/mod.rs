@@ -198,7 +198,10 @@ impl Table {
     pub fn r#enum(&mut self, name: &str, values: &[&str]) -> Column {
         Column::new(
             name.to_string(),
-            Type::Enum(values.iter().map(ToString::to_string).collect()),
+            Type::Enum(
+                name.to_string(),
+                values.iter().map(ToString::to_string).collect(),
+            ),
             self.sender.clone(),
         )
     }

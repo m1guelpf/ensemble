@@ -22,6 +22,8 @@ pub struct User {
 pub struct Post {
     #[model(incrementing)]
     pub id: u64,
+    pub title: String,
+    pub content: String,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 

@@ -1,5 +1,4 @@
 use std::env;
-
 mod migrations;
 
 #[tokio::main]
