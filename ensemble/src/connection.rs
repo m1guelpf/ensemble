@@ -1,17 +1,12 @@
-use rbatis::{
-    rbdc::{
-        deadpool::managed::{Object, PoolError},
-        pool::ManagerPorxy,
-    },
-    RBatis,
-};
+use rbatis::{rbdc::db::Connection as RbdcConnection, DefaultPool, RBatis};
 #[cfg(feature = "mysql")]
-use rbdc_mysql::driver::MysqlDriver;
+use rbdc_mysql::{driver::MysqlDriver, options::MySqlConnectOptions};
 #[cfg(feature = "postgres")]
 use rbdc_pg::driver::PgDriver;
+use std::str::FromStr;
 use std::sync::OnceLock;
 
-pub type Connection = Object<ManagerPorxy>;
+pub type Connection = Box<dyn RbdcConnection>;
 
 static DB_POOL: OnceLock<RBatis> = OnceLock::new();
 
@@ -46,9 +41,16 @@ pub async fn setup(database_url: &str, role: Option<&str>) -> Result<(), SetupEr
     );
 
     #[cfg(feature = "mysql")]
-    rb.link(MysqlDriver {}, database_url).await?;
+    rb.init_option::<MysqlDriver, MySqlConnectOptions, DefaultPool>(
+        MysqlDriver {},
+        MySqlConnectOptions::from_str(database_url)?,
+    )?;
     #[cfg(feature = "postgres")]
-    rb.link(PgDriver {}, database_url).await?;
+    rb.init_option::<PgDriver, PgConnectOptions, DefaultPool>(
+        PgDriver {},
+        PgConnectOptions::from_str(database_url),
+    )
+    .await?;
 
     if let Some(r) = role {
         // TODO: Assign role to the connection pool
@@ -66,10 +68,7 @@ pub enum ConnectError {
     NotInitialized,
 
     #[error("An error occurred while connecting to the database.")]
-    Disconnected(#[from] rbatis::Error),
-
-    #[error("An error occurred while getting a connection from the database pool.")]
-    Pool(#[from] PoolError<rbatis::Error>),
+    Connection(#[from] rbatis::Error),
 }
 
 /// Returns a connection to the database. Used internally by `ensemble` models.
