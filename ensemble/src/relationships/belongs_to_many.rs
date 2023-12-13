@@ -89,6 +89,10 @@ impl<Local: Model, Related: Model> Relationship for BelongsToMany<Local, Related
 			)
 	}
 
+	fn peek(&self) -> Option<&Self::Value> {
+		self.relation.as_ref()
+	}
+
 	async fn get(&mut self) -> Result<&mut Self::Value, Error> {
 		if self.relation.is_none() {
 			let relation = self.query().get().await?;
