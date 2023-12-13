@@ -34,132 +34,131 @@ use crate::{query::Builder, value::serializing_for_db, Error, Model};
 /// ```
 #[derive(Clone, Default)]
 pub struct BelongsToMany<Local: Model, Related: Model> {
-    local_key: String,
-    foreign_key: String,
-    pivot_table: String,
-    relation: Status<Vec<Related>>,
-    _local: std::marker::PhantomData<Local>,
-    /// The value of the local model's primary key.
-    pub value: Related::PrimaryKey,
+	local_key: String,
+	foreign_key: String,
+	pivot_table: String,
+	relation: Status<Vec<Related>>,
+	_local: std::marker::PhantomData<Local>,
+	/// The value of the local model's primary key.
+	pub value: Related::PrimaryKey,
 }
 
-#[async_trait::async_trait]
 impl<Local: Model, Related: Model> Relationship for BelongsToMany<Local, Related> {
-    type Value = Vec<Related>;
-    type Key = Related::PrimaryKey;
-    type RelatedKey = (Option<String>, Option<String>, Option<String>);
+	type Value = Vec<Related>;
+	type Key = Related::PrimaryKey;
+	type RelatedKey = (Option<String>, Option<String>, Option<String>);
 
-    fn build(value: Self::Key, (pivot_table, foreign_key, local_key): Self::RelatedKey) -> Self {
-        let pivot_table = pivot_table.unwrap_or_else(|| {
-            let mut names = [Local::NAME.to_string(), Related::NAME.to_string()];
-            names.sort();
-            names.join("_").to_snake_case()
-        });
+	fn build(value: Self::Key, (pivot_table, foreign_key, local_key): Self::RelatedKey) -> Self {
+		let pivot_table = pivot_table.unwrap_or_else(|| {
+			let mut names = [Local::NAME.to_string(), Related::NAME.to_string()];
+			names.sort();
+			names.join("_").to_snake_case()
+		});
 
-        let foreign_key = foreign_key.unwrap_or_else(|| {
-            format!("{}_{}", Related::NAME.to_snake_case(), Related::PRIMARY_KEY).to_snake_case()
-        });
+		let foreign_key = foreign_key.unwrap_or_else(|| {
+			format!("{}_{}", Related::NAME.to_snake_case(), Related::PRIMARY_KEY).to_snake_case()
+		});
 
-        let local_key = local_key.unwrap_or_else(|| {
-            format!("{}_{}", Local::NAME.to_snake_case(), Local::PRIMARY_KEY).to_snake_case()
-        });
+		let local_key = local_key.unwrap_or_else(|| {
+			format!("{}_{}", Local::NAME.to_snake_case(), Local::PRIMARY_KEY).to_snake_case()
+		});
 
-        Self {
-            value,
-            local_key,
-            foreign_key,
-            pivot_table,
-            relation: Status::initial(),
-            _local: std::marker::PhantomData,
-        }
-    }
+		Self {
+			value,
+			local_key,
+			foreign_key,
+			pivot_table,
+			relation: Status::initial(),
+			_local: std::marker::PhantomData,
+		}
+	}
 
-    fn query(&self) -> Builder {
-        Related::query()
-            .from(Related::TABLE_NAME)
-            .join(
-                &self.pivot_table,
-                &format!("{}.{}", Related::TABLE_NAME, Related::PRIMARY_KEY),
-                "=",
-                &format!("{}.{}", self.pivot_table, self.foreign_key),
-            )
-            .r#where(
-                &format!("{}.{}", self.pivot_table, self.local_key),
-                "=",
-                self.value.clone(),
-            )
-    }
+	fn query(&self) -> Builder {
+		Related::query()
+			.from(Related::TABLE_NAME)
+			.join(
+				&self.pivot_table,
+				&format!("{}.{}", Related::TABLE_NAME, Related::PRIMARY_KEY),
+				"=",
+				&format!("{}.{}", self.pivot_table, self.foreign_key),
+			)
+			.r#where(
+				&format!("{}.{}", self.pivot_table, self.local_key),
+				"=",
+				self.value.clone(),
+			)
+	}
 
-    async fn get(&mut self) -> Result<&mut Self::Value, Error> {
-        if self.relation.is_none() {
-            let relation = self.query().get().await?;
+	async fn get(&mut self) -> Result<&mut Self::Value, Error> {
+		if self.relation.is_none() {
+			let relation = self.query().get().await?;
 
-            self.relation = Status::Fetched(Some(relation));
-        }
+			self.relation = Status::Fetched(Some(relation));
+		}
 
-        Ok(self.relation.as_mut().unwrap())
-    }
+		Ok(self.relation.as_mut().unwrap())
+	}
 
-    fn is_loaded(&self) -> bool {
-        self.relation.is_loaded()
-    }
+	fn is_loaded(&self) -> bool {
+		self.relation.is_loaded()
+	}
 
-    fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
-        Related::query()
-            .from(Related::TABLE_NAME)
-            .join(
-                &self.pivot_table,
-                &format!("{}.{}", Related::TABLE_NAME, Related::PRIMARY_KEY),
-                "=",
-                &format!("{}.{}", self.pivot_table, self.foreign_key),
-            )
-            .r#where(
-                &format!("{}.{}", self.pivot_table, self.local_key),
-                "in",
-                related,
-            )
-    }
+	fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
+		Related::query()
+			.from(Related::TABLE_NAME)
+			.join(
+				&self.pivot_table,
+				&format!("{}.{}", Related::TABLE_NAME, Related::PRIMARY_KEY),
+				"=",
+				&format!("{}.{}", self.pivot_table, self.foreign_key),
+			)
+			.r#where(
+				&format!("{}.{}", self.pivot_table, self.local_key),
+				"in",
+				related,
+			)
+	}
 
-    fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
-        let related = find_related(related, &self.foreign_key, &self.value, false)?;
+	fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
+		let related = find_related(related, &self.foreign_key, &self.value, false)?;
 
-        if !related.is_empty() {
-            self.relation = Status::Fetched(Some(related));
-        }
+		if !related.is_empty() {
+			self.relation = Status::Fetched(Some(related));
+		}
 
-        Ok(())
-    }
+		Ok(())
+	}
 }
 
 impl<Local: Model, Related: Model> Debug for BelongsToMany<Local, Related> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.relation.fmt(f)
-    }
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		self.relation.fmt(f)
+	}
 }
 
 impl<Local: Model, Related: Model> Serialize for BelongsToMany<Local, Related> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        if serializing_for_db::<S>() {
-            if self.value == Default::default() {
-                return serializer.serialize_none();
-            }
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		if serializing_for_db::<S>() {
+			if self.value == Default::default() {
+				return serializer.serialize_none();
+			}
 
-            return self.value.serialize(serializer);
-        }
+			return self.value.serialize(serializer);
+		}
 
-        self.relation.serialize(serializer)
-    }
+		self.relation.serialize(serializer)
+	}
 }
 
 #[cfg(feature = "schema")]
 impl<Local: Model, Related: Model + schemars::JsonSchema> schemars::JsonSchema
-    for BelongsToMany<Local, Related>
+	for BelongsToMany<Local, Related>
 {
-    fn schema_name() -> String {
-        <Option<Vec<Related>>>::schema_name()
-    }
+	fn schema_name() -> String {
+		<Option<Vec<Related>>>::schema_name()
+	}
 
-    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-        gen.subschema_for::<Option<Vec<Related>>>()
-    }
+	fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+		gen.subschema_for::<Option<Vec<Related>>>()
+	}
 }

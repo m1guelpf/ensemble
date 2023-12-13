@@ -1,3 +1,3 @@
 mod derive {
-    automod::dir!("tests/derive");
+	automod::dir!("tests/derive");
 }

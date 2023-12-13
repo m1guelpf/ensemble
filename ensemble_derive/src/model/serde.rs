@@ -7,214 +7,214 @@ use super::field::Fields;
 use crate::Relationship;
 
 pub fn r#impl(name: &Ident, fields: &Fields) -> syn::Result<TokenStream> {
-    let mut serde = impl_serialize(name, fields)?;
-    serde.extend(impl_deserialize(name, fields));
+	let mut serde = impl_serialize(name, fields)?;
+	serde.extend(impl_deserialize(name, fields));
 
-    Ok(serde)
+	Ok(serde)
 }
 
 pub fn impl_serialize(name: &Ident, fields: &Fields) -> syn::Result<TokenStream> {
-    let count = fields.fields.len();
-    let primary_key = fields.primary_key()?;
+	let count = fields.fields.len();
+	let primary_key = fields.primary_key()?;
 
-    let serialize_for_db = fields.fields.iter().filter_map(|field| {
-        let ident = &field.ident;
-        let column = field
-            .attr
-            .column
-            .as_ref()
-            .map_or(field.ident.clone(), |v| Ident::new(v, field.span()));
+	let serialize_for_db = fields.fields.iter().filter_map(|field| {
+		let ident = &field.ident;
+		let column = field
+			.attr
+			.column
+			.as_ref()
+			.map_or(field.ident.clone(), |v| Ident::new(v, field.span()));
 
-        let Some((relationship_type, _, (_, key_expr))) = field.relationship(primary_key) else {
-            return Some(quote_spanned! {field.span()=>
-                state.serialize_field(stringify!(#column), &self.#ident)?;
-            });
-        };
+		let Some((relationship_type, _, (_, key_expr))) = field.relationship(primary_key) else {
+			return Some(quote_spanned! {field.span()=>
+				state.serialize_field(stringify!(#column), &self.#ident)?;
+			});
+		};
 
-        match relationship_type {
-            Relationship::BelongsTo => {}
-            _ => return None,
-        };
+		match relationship_type {
+			Relationship::BelongsTo => {},
+			_ => return None,
+		};
 
-        Some(quote_spanned! {field.span()=> {
-            let key: &'static str = #key_expr.leak();
-            state.serialize_field(key, &self.#ident)?;
-        }})
-    });
+		Some(quote_spanned! {field.span()=> {
+			let key: &'static str = #key_expr.leak();
+			state.serialize_field(key, &self.#ident)?;
+		}})
+	});
 
-    let general_serialize = fields.fields.iter().filter_map(|field| {
-        #[cfg(feature = "json")]
-        if field.attr.hide && !field.attr.show {
-            return None;
-        }
+	let general_serialize = fields.fields.iter().filter_map(|field| {
+		#[cfg(feature = "json")]
+		if field.attr.hide && !field.attr.show {
+			return None;
+		}
 
-        let ident = &field.ident;
-        let column = field
-            .attr
-            .column
-            .as_ref()
-            .map_or(field.ident.clone(), |v| Ident::new(v, field.span()));
+		let ident = &field.ident;
+		let column = field
+			.attr
+			.column
+			.as_ref()
+			.map_or(field.ident.clone(), |v| Ident::new(v, field.span()));
 
-        Some(if field.has_relationship() {
-            quote_spanned! {field.span()=>
-                if self.#ident.is_loaded() {
-                    state.serialize_field(stringify!(#column), &self.#ident)?;
-                }
-            }
-        } else {
-            quote_spanned! {field.span()=>
-                state.serialize_field(stringify!(#column), &self.#ident)?;
-            }
-        })
-    });
+		Some(if field.has_relationship() {
+			quote_spanned! {field.span()=>
+				if self.#ident.is_loaded() {
+					state.serialize_field(stringify!(#column), &self.#ident)?;
+				}
+			}
+		} else {
+			quote_spanned! {field.span()=>
+				state.serialize_field(stringify!(#column), &self.#ident)?;
+			}
+		})
+	});
 
-    let serialize_fields = quote! {
-        // ugly hack to figure out if we're serializing for rbs. might break in future (or previous) versions of rust.
-        if ::std::any::type_name::<S::Error>() == ::std::any::type_name::<::ensemble::rbs::Error>() {
-            #(#serialize_for_db)*
-        } else {
-            #(#general_serialize)*
-        }
-    };
+	let serialize_fields = quote! {
+		// ugly hack to figure out if we're serializing for rbs. might break in future (or previous) versions of rust.
+		if ::std::any::type_name::<S::Error>() == ::std::any::type_name::<::ensemble::rbs::Error>() {
+			#(#serialize_for_db)*
+		} else {
+			#(#general_serialize)*
+		}
+	};
 
-    Ok(quote! {
-        const _: () = {
-            use ::ensemble::Inflector;
-            use ::ensemble::serde::ser::SerializeStruct;
-            #[automatically_derived]
-            impl ::ensemble::serde::Serialize for #name {
-                fn serialize<S: ::ensemble::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                    let mut state = serializer.serialize_struct(stringify!(#name), #count)?;
-                    #serialize_fields
-                    state.end()
-                }
-            }
-        };
-    })
+	Ok(quote! {
+		const _: () = {
+			use ::ensemble::Inflector;
+			use ::ensemble::serde::ser::SerializeStruct;
+			#[automatically_derived]
+			impl ::ensemble::serde::Serialize for #name {
+				fn serialize<S: ::ensemble::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+					let mut state = serializer.serialize_struct(stringify!(#name), #count)?;
+					#serialize_fields
+					state.end()
+				}
+			}
+		};
+	})
 }
 
 pub fn impl_deserialize(name: &Ident, fields: &Fields) -> syn::Result<TokenStream> {
-    let visitor_name = Ident::new(
-        &format!("__{}", format!("{name} Visitor").to_class_case()),
-        name.span(),
-    );
-    let enum_key = &fields
-        .fields
-        .iter()
-        .filter_map(|f| {
-            if f.has_relationship() {
-                return None;
-            }
+	let visitor_name = Ident::new(
+		&format!("__{}", format!("{name} Visitor").to_class_case()),
+		name.span(),
+	);
+	let enum_key = &fields
+		.fields
+		.iter()
+		.filter_map(|f| {
+			if f.has_relationship() {
+				return None;
+			}
 
-            Some(Ident::new(&f.ident.to_string().to_class_case(), f.span()))
-        })
-        .collect::<Rc<_>>();
+			Some(Ident::new(&f.ident.to_string().to_class_case(), f.span()))
+		})
+		.collect::<Rc<_>>();
 
-    let column = &fields
-        .fields
-        .iter()
-        .filter_map(|f| {
-            if f.has_relationship() {
-                return None;
-            }
+	let column = &fields
+		.fields
+		.iter()
+		.filter_map(|f| {
+			if f.has_relationship() {
+				return None;
+			}
 
-            Some(
-                f.attr
-                    .column
-                    .as_ref()
-                    .map_or(f.ident.clone(), |v| Ident::new(v, f.span())),
-            )
-        })
-        .collect::<Rc<_>>();
+			Some(
+				f.attr
+					.column
+					.as_ref()
+					.map_or(f.ident.clone(), |v| Ident::new(v, f.span())),
+			)
+		})
+		.collect::<Rc<_>>();
 
-    let field_deserialize = field_deserialize(column, enum_key);
-    let visitor_deserialize = visitor_deserialize(name, &visitor_name, fields, column, enum_key)?;
+	let field_deserialize = field_deserialize(column, enum_key);
+	let visitor_deserialize = visitor_deserialize(name, &visitor_name, fields, column, enum_key)?;
 
-    Ok(quote! {
-        const _: () = {
-            use ensemble::Inflector;
-            use ::ensemble::serde as _serde;
-            use _serde::de::IntoDeserializer;
-            use ensemble::relationships::Relationship;
+	Ok(quote! {
+		const _: () = {
+			use ensemble::Inflector;
+			use ::ensemble::serde as _serde;
+			use _serde::de::IntoDeserializer;
+			use ensemble::relationships::Relationship;
 
-            #[automatically_derived]
-            impl<'de> _serde::Deserialize<'de> for #name {
-                fn deserialize<D: _serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-                    enum Field { #(#enum_key,)* Other(String) };
-                    #field_deserialize
+			#[automatically_derived]
+			impl<'de> _serde::Deserialize<'de> for #name {
+				fn deserialize<D: _serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+					enum Field { #(#enum_key,)* Other(String) };
+					#field_deserialize
 
-                    struct #visitor_name;
-                    #visitor_deserialize
+					struct #visitor_name;
+					#visitor_deserialize
 
-                    const FIELDS: &'static [&'static str] = &[#(stringify!(#column)),*];
+					const FIELDS: &'static [&'static str] = &[#(stringify!(#column)),*];
 
-                    deserializer.deserialize_struct(stringify!(#name), FIELDS, #visitor_name {})
-                }
-            }
-        };
-    })
+					deserializer.deserialize_struct(stringify!(#name), FIELDS, #visitor_name {})
+				}
+			}
+		};
+	})
 }
 
 fn field_deserialize(column: &Rc<[Ident]>, enum_key: &Rc<[Ident]>) -> TokenStream {
-    let expecting_str = column
-        .iter()
-        .map(|f| format!("`{f}`"))
-        .collect::<Rc<_>>()
-        .join(" or ");
+	let expecting_str = column
+		.iter()
+		.map(|f| format!("`{f}`"))
+		.collect::<Rc<_>>()
+		.join(" or ");
 
-    quote! {
-        impl<'de> _serde::Deserialize<'de> for Field {
-            fn deserialize<D: _serde::de::Deserializer<'de>>(deserializer: D) -> Result<Field, D::Error> {
-                struct FieldVisitor;
+	quote! {
+		impl<'de> _serde::Deserialize<'de> for Field {
+			fn deserialize<D: _serde::de::Deserializer<'de>>(deserializer: D) -> Result<Field, D::Error> {
+				struct FieldVisitor;
 
-                impl<'de> _serde::de::Visitor<'de> for FieldVisitor {
-                    type Value = Field;
+				impl<'de> _serde::de::Visitor<'de> for FieldVisitor {
+					type Value = Field;
 
-                    fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                        formatter.write_str(#expecting_str)
-                    }
+					fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+						formatter.write_str(#expecting_str)
+					}
 
-                    fn visit_str<E: _serde::de::Error>(self, value: &str) -> Result<Field, E> {
-                        match value {
-                            #(stringify!(#column) => Ok(Field::#enum_key),)*
-                            _ => {
-                                Ok(Field::Other(::std::string::ToString::to_string(value)))
-                            },
-                        }
-                    }
-                }
+					fn visit_str<E: _serde::de::Error>(self, value: &str) -> Result<Field, E> {
+						match value {
+							#(stringify!(#column) => Ok(Field::#enum_key),)*
+							_ => {
+								Ok(Field::Other(::std::string::ToString::to_string(value)))
+							},
+						}
+					}
+				}
 
-                deserializer.deserialize_identifier(FieldVisitor)
-            }
-        }
-    }
+				deserializer.deserialize_identifier(FieldVisitor)
+			}
+		}
+	}
 }
 
 #[allow(clippy::too_many_lines)]
 fn visitor_deserialize(
-    name: &Ident,
-    visitor_name: &Ident,
-    fields: &Fields,
-    column: &Rc<[Ident]>,
-    enum_key: &Rc<[Ident]>,
+	name: &Ident,
+	visitor_name: &Ident,
+	fields: &Fields,
+	column: &Rc<[Ident]>,
+	enum_key: &Rc<[Ident]>,
 ) -> syn::Result<TokenStream> {
-    let primary_key = fields.primary_key()?;
-    let key = &fields
-        .fields
-        .iter()
-        .filter(|f| !f.has_relationship())
-        .map(|f| &f.ident)
-        .collect::<Rc<_>>();
+	let primary_key = fields.primary_key()?;
+	let key = &fields
+		.fields
+		.iter()
+		.filter(|f| !f.has_relationship())
+		.map(|f| &f.ident)
+		.collect::<Rc<_>>();
 
-    let needs_collect = fields.fields.iter().any(|f| {
-        let Some((relationship_type, _, _)) = f.relationship(primary_key) else {
-            return false;
-        };
+	let needs_collect = fields.fields.iter().any(|f| {
+		let Some((relationship_type, ..)) = f.relationship(primary_key) else {
+			return false;
+		};
 
-        matches!(relationship_type, Relationship::BelongsTo)
-    });
+		matches!(relationship_type, Relationship::BelongsTo)
+	});
 
-    let required_checks = fields.fields.iter().filter_map(|f| {
+	let required_checks = fields.fields.iter().filter_map(|f| {
         let ident = &f.ident;
         let column = f
             .attr
@@ -231,17 +231,17 @@ fn visitor_deserialize(
         Some(quote_spanned! {f.span()=> let #ident: #ty = #ident.ok_or_else(|| _serde::de::Error::missing_field(stringify!(#column)))?; })
     });
 
-    let ensure_no_leftovers = if needs_collect {
-        quote! {
-            if let Some(key) = __collect.keys().next() {
-                return Err(_serde::de::Error::unknown_field(&key, FIELDS));
-            }
-        }
-    } else {
-        TokenStream::new()
-    };
+	let ensure_no_leftovers = if needs_collect {
+		quote! {
+			if let Some(key) = __collect.keys().next() {
+				return Err(_serde::de::Error::unknown_field(&key, FIELDS));
+			}
+		}
+	} else {
+		TokenStream::new()
+	};
 
-    let model_keys = fields.fields.iter().map(|f| {
+	let model_keys = fields.fields.iter().map(|f| {
         let ident = &f.ident;
         let ty = &f.ty;
 
@@ -276,63 +276,63 @@ fn visitor_deserialize(
         quote_spanned! {f.span()=> #ident: <#relationship_ident<#name, #related>>::build(#key_ident.clone(), #foreign_key) }
     });
 
-    let build_model = quote! {
-        let __model = #name { #(#model_keys),* };
-        #ensure_no_leftovers
-        Ok(__model)
-    };
+	let build_model = quote! {
+		let __model = #name { #(#model_keys),* };
+		#ensure_no_leftovers
+		Ok(__model)
+	};
 
-    let init_collect = if needs_collect {
-        quote! {
-            let mut __collect = ::std::collections::HashMap::<String, _serde::__private::de::Content>::new();
-        }
-    } else {
-        TokenStream::new()
-    };
+	let init_collect = if needs_collect {
+		quote! {
+			let mut __collect = ::std::collections::HashMap::<String, _serde::__private::de::Content>::new();
+		}
+	} else {
+		TokenStream::new()
+	};
 
-    let handle_unknown_field = if needs_collect {
-        quote! {
-            __collect.insert(name, map.next_value()?);
-        }
-    } else {
-        quote! {
-            return Err(_serde::de::Error::unknown_field(&name, FIELDS));
-        }
-    };
+	let handle_unknown_field = if needs_collect {
+		quote! {
+			__collect.insert(name, map.next_value()?);
+		}
+	} else {
+		quote! {
+			return Err(_serde::de::Error::unknown_field(&name, FIELDS));
+		}
+	};
 
-    Ok(quote! {
-        #[allow(clippy::clone_on_copy, clippy::redundant_clone)]
-        impl<'de> _serde::de::Visitor<'de> for #visitor_name {
-            type Value = #name;
+	Ok(quote! {
+		#[allow(clippy::clone_on_copy, clippy::redundant_clone)]
+		impl<'de> _serde::de::Visitor<'de> for #visitor_name {
+			type Value = #name;
 
-            fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                formatter.write_str(&format!("struct {}", stringify!(#name)))
-            }
+			fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+				formatter.write_str(&format!("struct {}", stringify!(#name)))
+			}
 
-            fn visit_map<V: _serde::de::MapAccess<'de>>(self, mut map: V) -> Result<#name, V::Error> {
-                #(let mut #key = None;)*
-                #init_collect
+			fn visit_map<V: _serde::de::MapAccess<'de>>(self, mut map: V) -> Result<#name, V::Error> {
+				#(let mut #key = None;)*
+				#init_collect
 
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        #(
-                            Field::#enum_key => {
-                                if #key.is_some() {
-                                    return Err(_serde::de::Error::duplicate_field(stringify!(#column)));
-                                }
-                                #key = Some(map.next_value()?);
-                            },
-                        )*
-                        Field::Other(name) => {
-                            #handle_unknown_field
-                        }
-                    }
-                }
+				while let Some(key) = map.next_key()? {
+					match key {
+						#(
+							Field::#enum_key => {
+								if #key.is_some() {
+									return Err(_serde::de::Error::duplicate_field(stringify!(#column)));
+								}
+								#key = Some(map.next_value()?);
+							},
+						)*
+						Field::Other(name) => {
+							#handle_unknown_field
+						}
+					}
+				}
 
-                #(#required_checks)*
+				#(#required_checks)*
 
-                #build_model
-            }
-        }
-    })
+				#build_model
+			}
+		}
+	})
 }

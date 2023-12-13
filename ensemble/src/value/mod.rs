@@ -12,7 +12,7 @@ mod ser;
 ///
 /// Returns an error if serialization fails.
 pub fn for_db<T: Serialize>(value: T) -> Result<rbs::Value, rbs::Error> {
-    fast_serialize(value)
+	fast_serialize(value)
 }
 
 /// Deserialize a model from the database.
@@ -21,9 +21,9 @@ pub fn for_db<T: Serialize>(value: T) -> Result<rbs::Value, rbs::Error> {
 ///
 /// Returns an error if deserialization fails.
 pub(crate) fn from<M: Model>(value: rbs::Value) -> Result<M, rbs::Error> {
-    deserialize_value::<M>(value)
+	deserialize_value::<M>(value)
 }
 
 pub(crate) fn serializing_for_db<S: serde::Serializer>() -> bool {
-    std::any::type_name::<S::Error>() == std::any::type_name::<rbs::Error>()
+	std::any::type_name::<S::Error>() == std::any::type_name::<rbs::Error>()
 }
