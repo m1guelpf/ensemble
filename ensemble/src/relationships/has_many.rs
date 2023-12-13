@@ -5,9 +5,9 @@ use std::{collections::HashMap, fmt::Debug};
 
 use super::{find_related, Relationship, Status};
 use crate::{
-    query::Builder,
-    value::{self, serializing_for_db},
-    Error, Model,
+	query::Builder,
+	value::{self, serializing_for_db},
+	Error, Model,
 };
 
 /// ## A One to Many relationship.
@@ -41,164 +41,163 @@ use crate::{
 /// ```
 #[derive(Clone, Default)]
 pub struct HasMany<Local: Model, Related: Model> {
-    foreign_key: String,
-    relation: Status<Vec<Related>>,
-    /// The value of the local model's primary key.
-    pub value: Local::PrimaryKey,
+	foreign_key: String,
+	relation: Status<Vec<Related>>,
+	/// The value of the local model's primary key.
+	pub value: Local::PrimaryKey,
 }
 
-#[async_trait::async_trait]
 impl<Local: Model, Related: Model> Relationship for HasMany<Local, Related> {
-    type Value = Vec<Related>;
-    type Key = Local::PrimaryKey;
-    type RelatedKey = Option<String>;
+	type Value = Vec<Related>;
+	type Key = Local::PrimaryKey;
+	type RelatedKey = Option<String>;
 
-    fn build(value: Self::Key, foreign_key: Self::RelatedKey) -> Self {
-        let foreign_key = foreign_key.unwrap_or_else(|| {
-            format!("{}_{}", Local::NAME.to_snake_case(), Local::PRIMARY_KEY).to_snake_case()
-        });
+	fn build(value: Self::Key, foreign_key: Self::RelatedKey) -> Self {
+		let foreign_key = foreign_key.unwrap_or_else(|| {
+			format!("{}_{}", Local::NAME.to_snake_case(), Local::PRIMARY_KEY).to_snake_case()
+		});
 
-        Self {
-            value,
-            foreign_key,
-            relation: Status::initial(),
-        }
-    }
+		Self {
+			value,
+			foreign_key,
+			relation: Status::initial(),
+		}
+	}
 
-    fn query(&self) -> Builder {
-        Related::query()
-            .r#where(
-                &format!("{}.{}", Related::TABLE_NAME, self.foreign_key),
-                "=",
-                self.value.clone(),
-            )
-            .where_not_null(&format!("{}.{}", Related::TABLE_NAME, self.foreign_key))
-    }
+	fn query(&self) -> Builder {
+		Related::query()
+			.r#where(
+				&format!("{}.{}", Related::TABLE_NAME, self.foreign_key),
+				"=",
+				self.value.clone(),
+			)
+			.where_not_null(&format!("{}.{}", Related::TABLE_NAME, self.foreign_key))
+	}
 
-    /// Get the related models.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the model cannot be retrieved, or if a connection to the database cannot be established.
-    async fn get(&mut self) -> Result<&mut Self::Value, Error> {
-        if self.relation.is_none() {
-            let relation = self.query().get().await?;
+	/// Get the related models.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the model cannot be retrieved, or if a connection to the database cannot be established.
+	async fn get(&mut self) -> Result<&mut Self::Value, Error> {
+		if self.relation.is_none() {
+			let relation = self.query().get().await?;
 
-            self.relation = Status::Fetched(Some(relation));
-        }
+			self.relation = Status::Fetched(Some(relation));
+		}
 
-        Ok(self.relation.as_mut().unwrap())
-    }
+		Ok(self.relation.as_mut().unwrap())
+	}
 
-    fn is_loaded(&self) -> bool {
-        self.relation.is_loaded()
-    }
+	fn is_loaded(&self) -> bool {
+		self.relation.is_loaded()
+	}
 
-    fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
-        Related::query()
-            .r#where(
-                &format!("{}.{}", Related::TABLE_NAME, self.foreign_key),
-                "in",
-                related,
-            )
-            .where_not_null(&format!("{}.{}", Related::TABLE_NAME, self.foreign_key))
-    }
+	fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
+		Related::query()
+			.r#where(
+				&format!("{}.{}", Related::TABLE_NAME, self.foreign_key),
+				"in",
+				related,
+			)
+			.where_not_null(&format!("{}.{}", Related::TABLE_NAME, self.foreign_key))
+	}
 
-    fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
-        let related = find_related(related, &self.foreign_key, &self.value, false)?;
+	fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
+		let related = find_related(related, &self.foreign_key, &self.value, false)?;
 
-        if !related.is_empty() {
-            self.relation = Status::Fetched(Some(related));
-        }
+		if !related.is_empty() {
+			self.relation = Status::Fetched(Some(related));
+		}
 
-        Ok(())
-    }
+		Ok(())
+	}
 }
 
 impl<Local: Model, Related: Model> HasMany<Local, Related> {
-    /// Create a new `Related` model.
-    ///
-    /// ## Errors
-    ///
-    /// Returns an error if the model cannot be inserted, or if a connection to the database cannot be established.
-    ///
-    /// ## Example
-    ///
-    /// ```rust
-    /// # use ensemble::{Model, relationships::HasMany};
-    /// # #[derive(Debug, Model, Clone)]
-    /// # struct Comment {
-    /// #   id: u64,
-    /// #   content: String,
-    /// # }
-    /// # #[derive(Debug, Model, Clone)]
-    /// # struct Post {
-    /// #  id: u64,
-    /// #  comments: HasMany<Post, Comment>
-    /// # }
-    /// # async fn call() -> Result<(), ensemble::Error> {
-    /// let mut post = Post::find(1).await?;
-    ///
-    /// let comment = post.comments.create(Comment {
-    ///  id: 1,
-    ///  content: "Hello, world!".to_string(),
-    /// }).await?;
-    /// # Ok(())
-    /// # }
-    pub async fn create(&mut self, related: Related) -> Result<Related, Error>
-    where
-        Related: Clone,
-    {
-        let Value::Map(mut value) = rbs::to_value(related)? else {
-            return Err(Error::Serialization(rbs::Error::Syntax(
-                "Expected a map".to_string(),
-            )));
-        };
+	/// Create a new `Related` model.
+	///
+	/// ## Errors
+	///
+	/// Returns an error if the model cannot be inserted, or if a connection to the database cannot be established.
+	///
+	/// ## Example
+	///
+	/// ```rust
+	/// # use ensemble::{Model, relationships::HasMany};
+	/// # #[derive(Debug, Model, Clone)]
+	/// # struct Comment {
+	/// #   id: u64,
+	/// #   content: String,
+	/// # }
+	/// # #[derive(Debug, Model, Clone)]
+	/// # struct Post {
+	/// #  id: u64,
+	/// #  comments: HasMany<Post, Comment>
+	/// # }
+	/// # async fn call() -> Result<(), ensemble::Error> {
+	/// let mut post = Post::find(1).await?;
+	///
+	/// let comment = post.comments.create(Comment {
+	///  id: 1,
+	///  content: "Hello, world!".to_string(),
+	/// }).await?;
+	/// # Ok(())
+	/// # }
+	pub async fn create(&mut self, related: Related) -> Result<Related, Error>
+	where
+		Related: Clone,
+	{
+		let Value::Map(mut value) = rbs::to_value(related)? else {
+			return Err(Error::Serialization(rbs::Error::Syntax(
+				"Expected a map".to_string(),
+			)));
+		};
 
-        value.insert(
-            Value::String(self.foreign_key.clone()),
-            value::for_db(&self.value)?,
-        );
+		value.insert(
+			Value::String(self.foreign_key.clone()),
+			value::for_db(&self.value)?,
+		);
 
-        let result = Related::create(rbs::from_value(Value::Map(value))?).await?;
+		let result = Related::create(rbs::from_value(Value::Map(value))?).await?;
 
-        if let Status::Fetched(Some(relation)) = &mut self.relation {
-            relation.push(result.clone());
-        }
+		if let Status::Fetched(Some(relation)) = &mut self.relation {
+			relation.push(result.clone());
+		}
 
-        Ok(result)
-    }
+		Ok(result)
+	}
 }
 
 impl<Local: Model, Related: Model> Debug for HasMany<Local, Related> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.relation.fmt(f)
-    }
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		self.relation.fmt(f)
+	}
 }
 
 impl<Local: Model, Related: Model> Serialize for HasMany<Local, Related> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        if serializing_for_db::<S>() {
-            if self.value == Default::default() {
-                return serializer.serialize_none();
-            }
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		if serializing_for_db::<S>() {
+			if self.value == Default::default() {
+				return serializer.serialize_none();
+			}
 
-            return self.value.serialize(serializer);
-        }
+			return self.value.serialize(serializer);
+		}
 
-        self.relation.serialize(serializer)
-    }
+		self.relation.serialize(serializer)
+	}
 }
 
 #[cfg(feature = "schema")]
 impl<Local: Model, Related: Model + schemars::JsonSchema> schemars::JsonSchema
-    for HasMany<Local, Related>
+	for HasMany<Local, Related>
 {
-    fn schema_name() -> String {
-        <Option<Vec<Related>>>::schema_name()
-    }
+	fn schema_name() -> String {
+		<Option<Vec<Related>>>::schema_name()
+	}
 
-    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-        gen.subschema_for::<Option<Vec<Related>>>()
-    }
+	fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+		gen.subschema_for::<Option<Vec<Related>>>()
+	}
 }

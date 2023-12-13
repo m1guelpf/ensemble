@@ -35,109 +35,108 @@ use crate::{query::Builder, value::serializing_for_db, Error, Model};
 /// ```
 #[derive(Clone, Default)]
 pub struct BelongsTo<Local: Model, Related: Model> {
-    local_key: String,
-    relation: Status<Related>,
-    _local: std::marker::PhantomData<Local>,
-    /// The value of the local model's related key.
-    pub value: Related::PrimaryKey,
+	local_key: String,
+	relation: Status<Related>,
+	_local: std::marker::PhantomData<Local>,
+	/// The value of the local model's related key.
+	pub value: Related::PrimaryKey,
 }
 
-#[async_trait::async_trait]
 impl<Local: Model, Related: Model> Relationship for BelongsTo<Local, Related> {
-    type Value = Related;
-    type Key = Related::PrimaryKey;
-    type RelatedKey = Option<String>;
+	type Value = Related;
+	type Key = Related::PrimaryKey;
+	type RelatedKey = Option<String>;
 
-    fn build(value: Self::Key, local_key: Self::RelatedKey) -> Self {
-        let local_key = local_key.unwrap_or_else(|| Related::PRIMARY_KEY.to_snake_case());
+	fn build(value: Self::Key, local_key: Self::RelatedKey) -> Self {
+		let local_key = local_key.unwrap_or_else(|| Related::PRIMARY_KEY.to_snake_case());
 
-        Self {
-            value,
-            local_key,
-            relation: Status::initial(),
-            _local: std::marker::PhantomData,
-        }
-    }
+		Self {
+			value,
+			local_key,
+			relation: Status::initial(),
+			_local: std::marker::PhantomData,
+		}
+	}
 
-    fn query(&self) -> Builder {
-        Related::query()
-            .r#where(
-                &format!("{}.{}", Related::TABLE_NAME, self.local_key),
-                "=",
-                self.value.clone(),
-            )
-            .limit(1)
-    }
+	fn query(&self) -> Builder {
+		Related::query()
+			.r#where(
+				&format!("{}.{}", Related::TABLE_NAME, self.local_key),
+				"=",
+				self.value.clone(),
+			)
+			.limit(1)
+	}
 
-    /// Get the related model.
-    async fn get(&mut self) -> Result<&mut Self::Value, Error> {
-        if self.relation.is_none() {
-            let relation = self.query().first().await?.ok_or(Error::NotFound)?;
+	/// Get the related model.
+	async fn get(&mut self) -> Result<&mut Self::Value, Error> {
+		if self.relation.is_none() {
+			let relation = self.query().first().await?.ok_or(Error::NotFound)?;
 
-            self.relation = Status::Fetched(Some(relation));
-        }
+			self.relation = Status::Fetched(Some(relation));
+		}
 
-        Ok(self.relation.as_mut().unwrap())
-    }
+		Ok(self.relation.as_mut().unwrap())
+	}
 
-    fn is_loaded(&self) -> bool {
-        self.relation.is_loaded()
-    }
+	fn is_loaded(&self) -> bool {
+		self.relation.is_loaded()
+	}
 
-    fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
-        Related::query()
-            .r#where(
-                &format!("{}.{}", Related::TABLE_NAME, self.local_key),
-                "in",
-                related,
-            )
-            .limit(1)
-    }
+	fn eager_query(&self, related: Vec<Self::Key>) -> Builder {
+		Related::query()
+			.r#where(
+				&format!("{}.{}", Related::TABLE_NAME, self.local_key),
+				"in",
+				related,
+			)
+			.limit(1)
+	}
 
-    fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
-        let related = find_related(related, &self.local_key, &self.value, true)?;
+	fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
+		let related = find_related(related, &self.local_key, &self.value, true)?;
 
-        self.relation = Status::Fetched(related.into_iter().next());
+		self.relation = Status::Fetched(related.into_iter().next());
 
-        Ok(())
-    }
+		Ok(())
+	}
 }
 
 impl<Local: Model, Related: Model> Debug for BelongsTo<Local, Related> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.relation.fmt(f)
-    }
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		self.relation.fmt(f)
+	}
 }
 
 impl<Local: Model, Related: Model> Serialize for BelongsTo<Local, Related> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        if serializing_for_db::<S>() {
-            if self.value == Default::default() {
-                return serializer.serialize_none();
-            }
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		if serializing_for_db::<S>() {
+			if self.value == Default::default() {
+				return serializer.serialize_none();
+			}
 
-            return self.value.serialize(serializer);
-        }
+			return self.value.serialize(serializer);
+		}
 
-        self.relation.serialize(serializer)
-    }
+		self.relation.serialize(serializer)
+	}
 }
 
 impl<Local: Model, Related: Model> PartialEq<Related> for BelongsTo<Local, Related> {
-    fn eq(&self, other: &Related) -> bool {
-        &self.value == other.primary_key()
-    }
+	fn eq(&self, other: &Related) -> bool {
+		&self.value == other.primary_key()
+	}
 }
 
 #[cfg(feature = "schema")]
 impl<Local: Model, Related: Model + schemars::JsonSchema> schemars::JsonSchema
-    for BelongsTo<Local, Related>
+	for BelongsTo<Local, Related>
 {
-    fn schema_name() -> String {
-        <Option<Related>>::schema_name()
-    }
+	fn schema_name() -> String {
+		<Option<Related>>::schema_name()
+	}
 
-    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-        gen.subschema_for::<Option<Related>>()
-    }
+	fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+		gen.subschema_for::<Option<Related>>()
+	}
 }
