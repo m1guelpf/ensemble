@@ -1,3 +1,4 @@
+use fastdate::Date;
 use rbs::Value;
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
@@ -131,6 +132,12 @@ impl Sub<Duration> for DateTime {
 
 	fn sub(self, rhs: Duration) -> Self::Output {
 		Self(self.0.sub(rhs))
+	}
+}
+
+impl PartialOrd for DateTime {
+	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+		self.0.partial_cmp(&other.0)
 	}
 }
 
