@@ -80,13 +80,11 @@ pub async fn get() -> Result<Connection, ConnectError> {
 	}
 }
 
-#[cfg(any(feature = "mysql", feature = "postgres"))]
 pub enum Database {
 	MySQL,
 	PostgreSQL,
 }
 
-#[cfg(any(feature = "mysql", feature = "postgres"))]
 impl Database {
 	pub const fn is_mysql(&self) -> bool {
 		matches!(self, Self::MySQL)
@@ -97,8 +95,10 @@ impl Database {
 	}
 }
 
-#[cfg(any(feature = "mysql", feature = "postgres"))]
 pub const fn which_db() -> Database {
+	#[cfg(all(not(feature = "mysql"), not(feature = "postgres")))]
+	panic!("Either the `mysql` or `postgres` feature must be enabled to use `ensemble`.");
+
 	#[cfg(all(feature = "mysql", feature = "postgres"))]
 	panic!("Both the `mysql` and `postgres` features are enabled. Please enable only one of them.");
 
