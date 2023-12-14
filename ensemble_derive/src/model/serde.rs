@@ -292,7 +292,7 @@ fn visitor_deserialize(
 
 	let handle_unknown_field = if needs_collect {
 		quote! {
-			__collect.insert(name, map.next_value()?);
+			__collect.insert(name, ___map.next_value()?);
 		}
 	} else {
 		quote! {
@@ -309,18 +309,18 @@ fn visitor_deserialize(
 				formatter.write_str(&format!("struct {}", stringify!(#name)))
 			}
 
-			fn visit_map<V: _serde::de::MapAccess<'de>>(self, mut map: V) -> Result<#name, V::Error> {
+			fn visit_map<V: _serde::de::MapAccess<'de>>(self, mut ___map: V) -> Result<#name, V::Error> {
 				#(let mut #key = None;)*
 				#init_collect
 
-				while let Some(key) = map.next_key()? {
-					match key {
+				while let Some(___key) = ___map.next_key()? {
+					match ___key {
 						#(
 							Field::#enum_key => {
 								if #key.is_some() {
 									return Err(_serde::de::Error::duplicate_field(stringify!(#column)));
 								}
-								#key = Some(map.next_value()?);
+								#key = Some(___map.next_value()?);
 							},
 						)*
 						Field::Other(name) => {
