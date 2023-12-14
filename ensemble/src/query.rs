@@ -421,6 +421,31 @@ impl Builder {
 		Ok(rbs::from_value(result.last_insert_id)?)
 	}
 
+	/// Increment a column's value by a given amount. Returns the number of affected rows.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the query fails, or if a connection to the database cannot be established.
+	pub async fn increment(self, column: &str, amount: u64) -> Result<u64, Error> {
+		let mut conn = connection::get().await?;
+		let (sql, mut bindings) = (
+			format!(
+				"UPDATE {} SET {column} = {column} + ? {}",
+				self.table,
+				self.to_sql(Type::Update)
+			),
+			self.get_bindings(),
+		);
+		bindings.insert(0, amount.into());
+
+		tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Executing UPDATE SQL query for increment");
+
+		conn.exec(&sql, bindings)
+			.await
+			.map_err(|e| Error::Database(e.to_string()))
+			.map(|r| r.rows_affected)
+	}
+
 	/// Update records in the database. Returns the number of affected rows.
 	///
 	/// # Errors
