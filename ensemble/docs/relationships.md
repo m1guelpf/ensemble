@@ -2,9 +2,9 @@
 
 Database tables are often related to one another. For example, a blog post may have many comments or an order could be related to the user who placed it. Ensemble makes managing and working with these relationships easy, with native support for the three most common:
 
--   [One To One](#one-to-one)
--   [One To Many](#one-to-many)
--   [Many To Many](#many-to-many-relationships)
+- [One To One](#one-to-one)
+- [One To Many](#one-to-many)
+- [Many To Many](#many-to-many-relationships)
 
 ## Defining Relationships
 

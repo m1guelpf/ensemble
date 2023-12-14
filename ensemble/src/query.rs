@@ -6,7 +6,10 @@ use std::{
 	fmt::Display,
 };
 
-use crate::{connection, value, Error, Model};
+use crate::{
+	connection::{self, Database},
+	value, Error, Model,
+};
 
 /// The Query Builder.
 #[derive(Debug)]
@@ -92,7 +95,7 @@ impl Builder {
 		self.r#where.push(WhereClause::Simple(Where {
 			boolean: Boolean::And,
 			operator: operator.into(),
-			column: column.to_string(),
+			column: Columns::escape(column),
 			value: Some(value::for_db(value).unwrap()),
 		}));
 
@@ -141,7 +144,7 @@ impl Builder {
 			operator: op.into(),
 			boolean: Boolean::Or,
 			value: Some(value.into()),
-			column: column.to_string(),
+			column: Columns::escape(column),
 		}));
 
 		self
@@ -153,8 +156,8 @@ impl Builder {
 		self.r#where.push(WhereClause::Simple(Where {
 			value: None,
 			boolean: Boolean::And,
-			column: column.to_string(),
 			operator: Operator::NotNull,
+			column: Columns::escape(column),
 		}));
 
 		self
@@ -169,7 +172,7 @@ impl Builder {
 		self.r#where.push(WhereClause::Simple(Where {
 			boolean: Boolean::And,
 			operator: Operator::In,
-			column: column.to_string(),
+			column: Columns::escape(column),
 			value: Some(Value::Array(values.into_iter().map(Into::into).collect())),
 		}));
 
@@ -182,8 +185,8 @@ impl Builder {
 		self.r#where.push(WhereClause::Simple(Where {
 			value: None,
 			boolean: Boolean::And,
-			column: column.to_string(),
 			operator: Operator::IsNull,
+			column: Columns::escape(column),
 		}));
 
 		self
@@ -200,10 +203,10 @@ impl Builder {
 	) -> Self {
 		self.join.push(Join {
 			operator: op.into(),
-			first: first.to_string(),
-			column: column.to_string(),
 			r#type: JoinType::Inner,
+			first: first.to_string(),
 			second: second.to_string(),
+			column: Columns::escape(column),
 		});
 
 		self
@@ -213,8 +216,8 @@ impl Builder {
 	#[must_use]
 	pub fn order_by<Dir: Into<Direction>>(mut self, column: &str, direction: Dir) -> Self {
 		self.order.push(Order {
-			column: column.to_string(),
 			direction: direction.into(),
+			column: Columns::escape(column),
 		});
 
 		self
@@ -254,7 +257,7 @@ impl Builder {
 			sql.push_str(" WHERE ");
 
 			for (i, where_clause) in self.r#where.iter().enumerate() {
-				sql.push_str(&where_clause.to_sql(i != self.r#where.len() - 1));
+				sql.push_str(&where_clause.to_sql(i != 0));
 			}
 		}
 
@@ -430,8 +433,10 @@ impl Builder {
 		let mut conn = connection::get().await?;
 		let (sql, mut bindings) = (
 			format!(
-				"UPDATE {} SET {column} = {column} + ? {}",
+				"UPDATE {} SET {} = {} + ? {}",
 				self.table,
+				Columns::escape(column),
+				Columns::escape(column),
 				self.to_sql(Type::Update)
 			),
 			self.get_bindings(),
@@ -560,13 +565,22 @@ impl From<Vec<&str>> for EagerLoad {
 
 pub struct Columns(Vec<(String, Value)>);
 
+impl Columns {
+	fn escape(column: &str) -> String {
+		match connection::which_db() {
+			Database::MySQL => format!("`{column}`"),
+			Database::PostgreSQL => format!("\"{column}\""),
+		}
+	}
+}
+
 #[allow(clippy::fallible_impl_from)]
 impl From<Value> for Columns {
 	fn from(value: Value) -> Self {
 		match value {
 			Value::Map(map) => Self(
 				map.into_iter()
-					.map(|(column, value)| (column.into_string().unwrap(), value))
+					.map(|(column, value)| (Self::escape(&column.into_string().unwrap()), value))
 					.collect(),
 			),
 			_ => panic!("The provided value is not a map."),
@@ -579,7 +593,7 @@ impl<T: Serialize> From<Vec<(&str, T)>> for Columns {
 		Self(
 			values
 				.iter()
-				.map(|(column, value)| ((*column).to_string(), value::for_db(value).unwrap()))
+				.map(|(column, value)| (Self::escape(column), value::for_db(value).unwrap()))
 				.collect(),
 		)
 	}
@@ -589,7 +603,7 @@ impl<T: Serialize> From<&[(&str, T)]> for Columns {
 		Self(
 			values
 				.iter()
-				.map(|(column, value)| ((*column).to_string(), value::for_db(value).unwrap()))
+				.map(|(column, value)| (Self::escape(column), value::for_db(value).unwrap()))
 				.collect(),
 		)
 	}
@@ -683,17 +697,13 @@ impl WhereClause {
 				let mut sql = String::new();
 
 				for (i, where_clause) in where_clauses.iter().enumerate() {
-					sql.push_str(&format!("({})", where_clause.to_sql(false)));
-
-					if i != where_clauses.len() - 1 {
-						sql.push_str(" AND ");
-					}
+					sql.push_str(&where_clause.to_sql(i != 0));
 				}
 
 				if add_boolean {
-					format!("{boolean} {sql}")
+					format!(" {boolean} ({sql})")
 				} else {
-					sql
+					format!("({sql})")
 				}
 			},
 		}
@@ -741,7 +751,7 @@ impl Where {
 		);
 
 		if add_boolean {
-			format!("{sql} {} ", self.boolean)
+			format!(" {} {sql} ", self.boolean)
 		} else {
 			sql
 		}
@@ -839,7 +849,7 @@ impl From<&str> for Operator {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Boolean {
 	And,
 	Or,
