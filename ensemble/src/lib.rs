@@ -158,6 +158,7 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
 		Self::query().with(eager_load)
 	}
 
+	/// Load a relationship for the model.
 	fn load<T: Into<EagerLoad> + Send>(
 		&mut self,
 		relation: T,
@@ -167,6 +168,29 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
 				let rows = self.eager_load(&relation, &[&self]).get_rows().await?;
 
 				self.fill_relation(&relation, &rows)?;
+			}
+
+			Ok(())
+		}
+	}
+
+	fn increment(
+		&mut self,
+		column: &str,
+		amount: u64,
+	) -> impl Future<Output = Result<(), Error>> + Send {
+		async move {
+			let rows_affected = Self::query()
+				.r#where(
+					Self::PRIMARY_KEY,
+					"=",
+					value::for_db(self.primary_key()).unwrap(),
+				)
+				.increment(column, amount)
+				.await?;
+
+			if rows_affected != 1 {
+				return Err(Error::UniqueViolation);
 			}
 
 			Ok(())
