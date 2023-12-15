@@ -572,9 +572,17 @@ pub struct Columns(Vec<(String, Value)>);
 
 impl Columns {
 	fn escape(column: &str) -> String {
+		let parts = column.split('.');
+
 		match connection::which_db() {
-			Database::MySQL => format!("`{column}`"),
-			Database::PostgreSQL => format!("\"{column}\""),
+			Database::MySQL => parts
+				.map(|part| format!("`{part}`"))
+				.collect::<Vec<String>>()
+				.join("."),
+			Database::PostgreSQL => parts
+				.map(|part| format!("\"{part}\""))
+				.collect::<Vec<String>>()
+				.join("."),
 		}
 	}
 }

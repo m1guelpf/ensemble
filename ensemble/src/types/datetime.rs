@@ -1,4 +1,3 @@
-use fastdate::Date;
 use rbs::Value;
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
