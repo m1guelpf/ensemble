@@ -270,13 +270,13 @@ fn impl_create(name: &Ident, fields: &Fields, primary_key: &Field) -> TokenStrea
 	{
 		let primary_key = &primary_key.ident;
 		quote! {
-			self.#primary_key = Self::query().insert(::ensemble::value::for_db(&self)?).await?;
+			self.#primary_key = Self::query().insert(::ensemble::value::for_db(&self)?).await?.ok_or(::ensemble::Error::Database("failed to retrieve primary key".to_string()))?;
 
 			Ok(self)
 		}
 	} else {
 		quote! {
-			Self::query().insert(::ensemble::value::for_db(&self)?).await?;
+			Self::query().insert::<Self::PrimaryKey, _>(::ensemble::value::for_db(&self)?).await?;
 
 			Ok(self)
 		}

@@ -306,11 +306,16 @@ impl Builder {
 			.await
 			.map_err(|e| Error::Database(e.to_string()))?;
 
-		values.first().and_then(Value::as_u64).ok_or_else(|| {
-			Error::Serialization(rbs::value::ext::Error::Syntax(
-				"Failed to parse count value".to_string(),
-			))
-		})
+		values
+			.first()
+			.and_then(|m| m.as_map())
+			.and_then(|m| m.first())
+			.and_then(|(_, v)| v.as_u64())
+			.ok_or_else(|| {
+				Error::Serialization(rbs::value::ext::Error::Syntax(
+					"Failed to parse count value".to_string(),
+				))
+			})
 	}
 
 	/// Execute the query and return the first result.
@@ -392,7 +397,7 @@ impl Builder {
 	pub async fn insert<Id: for<'de> serde::Deserialize<'de>, T: Into<Columns> + Send>(
 		&self,
 		columns: T,
-	) -> Result<Id, Error> {
+	) -> Result<Option<Id>, Error> {
 		if self.limit.is_some()
 			|| !self.join.is_empty()
 			|| !self.order.is_empty()
@@ -421,7 +426,7 @@ impl Builder {
 			.await
 			.map_err(|e| Error::Database(e.to_string()))?;
 
-		Ok(rbs::from_value(result.last_insert_id)?)
+		Ok(rbs::from_value(result.last_insert_id).ok())
 	}
 
 	/// Increment a column's value by a given amount. Returns the number of affected rows.
