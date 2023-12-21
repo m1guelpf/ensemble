@@ -1,15 +1,28 @@
+use ensemble_derive::Column;
 use std::{fmt::Display, sync::mpsc};
 
-use ensemble_derive::Column;
-
-use crate::connection::{self, Database};
-
 use super::Schemable;
+use crate::connection::{self, Database};
 
 #[derive(Debug)]
 pub struct Command {
 	pub(crate) inline_sql: String,
 	pub(crate) post_sql: Option<String>,
+}
+
+impl From<Command> for Schemable {
+	fn from(cmd: Command) -> Self {
+		Self::Command(cmd)
+	}
+}
+
+impl Command {
+	pub(crate) const fn from_sql(sql: String) -> Self {
+		Self {
+			inline_sql: None,
+			post_sql: Some(sql),
+		}
+	}
 }
 
 /// A foreign key constraint.
@@ -40,7 +53,7 @@ pub struct ForeignIndex {
 }
 
 impl ForeignIndex {
-	fn to_sql(&self) -> (String, Option<String>) {
+	fn to_sql(&self) -> (Option<String>, Option<String>) {
 		let foreign_column = &self
 			.foreign_column
 			.as_ref()
@@ -70,9 +83,9 @@ impl ForeignIndex {
 		}
 
 		match connection::which_db() {
-			Database::MySQL => (sql, None),
+			Database::MySQL => (Some(sql), None),
 			Database::PostgreSQL => (
-				sql,
+				Some(sql),
 				Some(format!(
 					"CREATE INDEX {index_name} ON {}({});",
 					self.origin_table, self.column

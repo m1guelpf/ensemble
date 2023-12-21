@@ -1,3 +1,6 @@
+//! Define your database's schema in Rust.
+#![doc = include_str!("../../docs/migrations.md")]
+
 use async_trait::async_trait;
 
 use crate::connection::ConnectError;

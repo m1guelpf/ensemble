@@ -95,6 +95,7 @@ impl Database {
 	}
 }
 
+#[allow(unreachable_code)]
 pub const fn which_db() -> Database {
 	#[cfg(all(not(feature = "mysql"), not(feature = "postgres")))]
 	panic!("Either the `mysql` or `postgres` feature must be enabled to use `ensemble`.");

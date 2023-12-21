@@ -26,10 +26,14 @@ ensemble_derive = { version = "0.0.4", path = "../ensemble_derive" }
 uuid = { version = "1.4.1", features = ["serde", "v4"], optional = true }
 rbdc-pg = { version = "4.5.2", default-features = false, optional = true }
 rbdc-mysql = { version = "4.5.1", default-features = false, optional = true }
-rbatis = { version = "4.5.6", default-features = false, features = ["default_mode"] }
+rbatis = { version = "4.5.6", default-features = false, features = [
+    "default_mode",
+] }
 
 [dev-dependencies]
 axum = "0.7.2"
+tokio = { version = "1.32.0", features = ["macros"] }
+ensemble = { path = ".", features = ["mysql", "postgres"] }
 
 [features]
 default = ["rustls", "json", "schema", "uuid"]

@@ -455,6 +455,7 @@ dependencies = [
  "Inflector",
  "async-trait",
  "axum",
+ "ensemble",
  "ensemble_derive",
  "fastdate",
  "itertools",

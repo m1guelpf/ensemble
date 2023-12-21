@@ -58,7 +58,7 @@ fn impl_new(fields: &Fields) -> TokenStream {
 	});
 
 	quote! {
-		pub fn new(#(#init_types),*) -> Self {
+		pub(crate) fn new(#(#init_types),*) -> Self {
 			Self {
 				#(#construct),*
 			}

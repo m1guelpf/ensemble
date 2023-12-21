@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.32.0", features = ["full"] }
 validator = { version = "0.16.1", features = ["derive"] }
-ensemble = { path = "../../ensemble", features = ["mysql", "validator"] }
+ensemble = { path = "../../ensemble", features = ["postgres", "validator"] }
