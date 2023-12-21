@@ -30,7 +30,7 @@ pub mod relationships;
 pub mod types;
 pub mod value;
 #[cfg(any(feature = "mysql", feature = "postgres"))]
-pub use connection::setup;
+pub use connection::{before_query, setup};
 pub use ensemble_derive::Model;
 
 #[derive(Debug, thiserror::Error)]

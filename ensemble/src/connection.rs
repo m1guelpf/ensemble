@@ -1,3 +1,4 @@
+use once_cell::sync::Lazy;
 use rbatis::{
     rbdc::{
         deadpool::managed::{Object, PoolError},
@@ -9,11 +10,17 @@ use rbatis::{
 use rbdc_mysql::driver::MysqlDriver;
 #[cfg(feature = "postgres")]
 use rbdc_pg::driver::PgDriver;
-use std::sync::OnceLock;
+use std::{
+    collections::HashMap,
+    sync::{OnceLock, RwLock},
+};
+use tokio::task::Id;
 
 pub type Connection = Object<ManagerPorxy>;
 
 static DB_POOL: OnceLock<RBatis> = OnceLock::new();
+static PER_THREAD_QUERY_SETTINGS: Lazy<RwLock<HashMap<Id, QuerySettings>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 #[derive(Debug, thiserror::Error)]
 pub enum SetupError {
@@ -108,4 +115,46 @@ pub const fn which_db() -> Database {
     } else {
         Database::PostgreSQL
     }
+}
+
+struct QuerySettings {
+    pub(crate) pre_sql: Option<String>,
+}
+
+pub struct Guard {
+    id: Id,
+}
+
+impl Drop for Guard {
+    fn drop(&mut self) {
+        let mut settings = PER_THREAD_QUERY_SETTINGS.write().unwrap();
+
+        settings.remove(&self.id);
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SettingsError {
+    #[error("Function called outside of a tokio thread.")]
+    TokioThread,
+
+    #[error("Failed to get lock.")]
+    Lock,
+}
+
+pub fn before_query(pre_sql: &str) -> Result<Guard, SettingsError> {
+    let id = tokio::task::try_id().ok_or(SettingsError::TokioThread)?;
+    let mut settings = PER_THREAD_QUERY_SETTINGS
+        .write()
+        .map_err(|_| SettingsError::Lock)?;
+
+    settings.insert(
+        id,
+        QuerySettings {
+            pre_sql: Some(pre_sql.to_string()),
+        },
+    );
+    drop(settings);
+
+    Ok(Guard { id })
 }

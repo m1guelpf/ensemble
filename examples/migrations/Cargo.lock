@@ -415,6 +415,7 @@ dependencies = [
  "ensemble_derive",
  "fastdate",
  "itertools",
+ "once_cell",
  "rbatis",
  "rbdc-mysql",
  "rbdc-pg",
