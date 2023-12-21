@@ -299,8 +299,8 @@ Ensemble's schema builder class provides methods for creating each type of suppo
 ```rust
 # use ensemble::migrations::Schema;
 # Schema::table("users", |table| {
-table.primary("id");
-table.primary(&["id", "parent_id"]);
+table.primary("id"); // Adds a primary key
+table.primary(&["id", "parent_id"]); // Adds composite keys
 table.index("state");
 table.full_text("body");
 # });
