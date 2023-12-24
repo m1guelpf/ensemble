@@ -1,64 +1,64 @@
 on:
-    pull_request:
-    push:
-        branches: [main]
+  pull_request:
+  push:
+    branches: [main]
 
 name: Continuous integration
 
 jobs:
-    test:
-        name: Test Suite
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout the code
-              uses: actions/checkout@v3
-            - name: 🗄️ Setup Rust cache
-              uses: actions/cache@v2
-              with:
-                  key: rust-cache
-                  path: |
-                      ~/.cargo/registry/index
-                      ~/.cargo/registry/cache
-                      ~/.cargo/git
-                      ./target
-            - name: 🦀 Install Rust
-              uses: actions-rs/toolchain@v1
-              with:
-                  profile: minimal
-                  toolchain: stable
-                  override: true
-            - name: 🧪 Run tests
-              uses: actions-rs/cargo@v1
-              with:
-                  command: test
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v3
+      - name: 🗄️ Setup Rust cache
+        uses: actions/cache@v2
+        with:
+          key: rust-cache
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git
+            ./target
+      - name: 🦀 Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+      - name: 🧪 Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
 
-    clippy:
-        name: Clippy
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout the code
-              uses: actions/checkout@v3
-            - name: 🗄️ Setup Rust cache
-              uses: actions/cache@v2
-              with:
-                  key: rust-cache-nightly
-                  path: |
-                      ~/.cargo/registry/index
-                      ~/.cargo/registry/cache
-                      ~/.cargo/git
-                      ./target
-            - uses: actions-rs/toolchain@v1
-              with:
-                  override: true
-                  profile: minimal
-                  toolchain: nightly
-                  components: rustfmt, clippy
-            - name: 🧹 Format code
-              uses: actions-rs/cargo@v1
-              with:
-                  command: fmt
-                  args: --all -- --check
-            - name: 📎 Clippy
-              uses: auguwu/clippy-action@1.2.2
-              with:
-                  token: ${{secrets.GITHUB_TOKEN}}
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v3
+      - name: 🗄️ Setup Rust cache
+        uses: actions/cache@v2
+        with:
+          key: rust-cache-nightly
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git
+            ./target
+      - uses: actions-rs/toolchain@v1
+        with:
+          override: true
+          profile: minimal
+          toolchain: nightly
+          components: rustfmt, clippy
+      - name: 🧹 Format code
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+      - name: 📎 Clippy
+        uses: auguwu/clippy-action@1.2.2
+        with:
+          token: ${{secrets.GITHUB_TOKEN}}
