@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use sha256::{digest, Sha256Digest};
 use std::{fmt::Debug, ops::Deref};
 
+use crate::value::deserializing_from_db;
+
 /// A wrapper around a value that has been hashed with SHA-256.
 #[derive(Clone, Eq, Default)]
 pub struct Hashed<T: Sha256Digest> {
@@ -79,10 +81,19 @@ impl<T: Sha256Digest> Serialize for Hashed<T> {
 
 impl<'de, T: Sha256Digest> Deserialize<'de> for Hashed<T> {
 	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-		Ok(Self {
-			_marker: std::marker::PhantomData,
-			hash: String::deserialize(deserializer)?,
-		})
+		let value = String::deserialize(deserializer)?;
+
+		if deserializing_from_db::<D>() {
+			Ok(Self {
+				hash: value,
+				_marker: std::marker::PhantomData,
+			})
+		} else {
+			Ok(Self {
+				hash: digest(value),
+				_marker: std::marker::PhantomData,
+			})
+		}
 	}
 }
 
