@@ -173,9 +173,7 @@ impl Field {
 			return None;
 		};
 
-		let Some(ty) = ty.path.segments.first() else {
-			return None;
-		};
+		let ty = ty.path.segments.first()?;
 
 		let relationship_type = ty.ident.to_string();
 		if !["HasOne", "HasMany", "BelongsTo", "BelongsToMany"]

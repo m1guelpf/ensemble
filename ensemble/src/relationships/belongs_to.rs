@@ -97,7 +97,7 @@ impl<Local: Model, Related: Model> Relationship for BelongsTo<Local, Related> {
 			.limit(1)
 	}
 
-	fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error> {
+	fn r#match(&mut self, related: Arc<Vec<HashMap<String, quaint::Value>>>) -> Result<(), Error> {
 		let related = find_related(related, &self.local_key, &self.value, true)?;
 
 		self.relation = Status::Fetched(related.into_iter().next());

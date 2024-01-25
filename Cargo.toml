@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["ensemble", "ensemble_derive", "test_suite"]
-exclude = ["examples/user", "examples/migrations", "examples/relationships"]
+members = ["ensemble", "ensemble_derive", "test_suite", "examples/*"]
 
 [workspace.package]
 license = "MIT"

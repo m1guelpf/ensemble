@@ -8,8 +8,9 @@ pub use async_trait::async_trait;
 use connection::ConnectError;
 #[doc(hidden)]
 pub use inflector::Inflector;
+use quaint::ast::Comparable;
 #[doc(hidden)]
-pub use rbs;
+pub use quaint::Value;
 #[doc(hidden)]
 pub use serde;
 #[doc(hidden)]
@@ -22,14 +23,15 @@ use std::{
 	collections::HashMap,
 	fmt::{Debug, Display},
 	future::Future,
+	sync::Arc,
 };
 
 mod connection;
-pub mod migrations;
+// pub mod migrations;
 pub mod query;
-pub mod relationships;
-pub mod types;
-pub mod value;
+// pub mod relationships;
+// pub mod types;
+// pub mod value;
 #[cfg(any(feature = "mysql", feature = "postgres"))]
 pub use connection::setup;
 pub use ensemble_derive::Model;
@@ -43,8 +45,8 @@ pub enum Error {
 	#[error(transparent)]
 	Validation(#[from] validator::ValidationErrors),
 
-	#[error("{0}")]
-	Database(String),
+	#[error(transparent)]
+	Database(#[from] quaint::error::Error),
 
 	#[error("The {0} field is required.")]
 	Required(&'static str),
@@ -65,6 +67,7 @@ pub enum Error {
 pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + Default {
 	/// The type of the primary key for the model.
 	type PrimaryKey: Display
+		+ for<'a> Into<quaint::Value<'a>>
 		+ DeserializeOwned
 		+ Serialize
 		+ PartialEq
@@ -124,18 +127,10 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
 	#[allow(unused_mut)]
 	fn delete(mut self) -> impl Future<Output = Result<(), Error>> + Send {
 		async move {
-			let rows_affected = Self::query()
-				.r#where(
-					Self::PRIMARY_KEY,
-					"=",
-					value::for_db(self.primary_key()).unwrap(),
-				)
+			Self::query()
+				.r#where(Self::PRIMARY_KEY.equals(self.primary_key().clone()))
 				.delete()
 				.await?;
-
-			if rows_affected != 1 {
-				return Err(Error::UniqueViolation);
-			}
 
 			Ok(())
 		}
@@ -149,12 +144,12 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
 
 	/// Begin querying the model.
 	#[must_use]
-	fn query() -> Builder {
+	fn query<'a>() -> Builder<'a> {
 		Builder::new(Self::TABLE_NAME.to_string())
 	}
 
 	/// Begin querying a model with eager loading.
-	fn with<T: Into<EagerLoad>>(eager_load: T) -> Builder {
+	fn with<'a, T: Into<EagerLoad>>(eager_load: T) -> Builder<'a> {
 		Self::query().with(eager_load)
 	}
 
@@ -165,9 +160,10 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
 	) -> impl Future<Output = Result<(), Error>> + Send {
 		async move {
 			for relation in relation.into().list() {
-				let rows = self.eager_load(&relation, &[&self]).get_rows().await?;
+				let query = self.eager_load(&relation, std::iter::once(&*self));
+				let rows = query.get_rows().await?.clone();
 
-				self.fill_relation(&relation, &rows)?;
+				self.fill_relation(&relation, Arc::new(rows))?;
 			}
 
 			Ok(())
@@ -177,15 +173,11 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
 	fn increment(
 		&mut self,
 		column: &str,
-		amount: u64,
+		amount: i64,
 	) -> impl Future<Output = Result<(), Error>> + Send {
 		async move {
 			let rows_affected = Self::query()
-				.r#where(
-					Self::PRIMARY_KEY,
-					"=",
-					value::for_db(self.primary_key()).unwrap(),
-				)
+				.r#where(Self::PRIMARY_KEY.equals(self.primary_key().clone()))
 				.increment(column, amount)
 				.await?;
 
@@ -210,7 +202,9 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
 	/// Eager load a relationship for a set of models.
 	/// This method is used internally by Ensemble, and should not be called directly.
 	#[doc(hidden)]
-	fn eager_load(&self, relation: &str, related: &[&Self]) -> Builder;
+	fn eager_load<'a>(&self, relation: &str, related: impl Iterator<Item = &'a Self>) -> Builder
+	where
+		Self: 'a;
 
 	/// Fill a relationship for a set of models.
 	/// This method is used internally by Ensemble, and should not be called directly.
@@ -218,7 +212,7 @@ pub trait Model: DeserializeOwned + Serialize + Sized + Send + Sync + Debug + De
 	fn fill_relation(
 		&mut self,
 		relation: &str,
-		related: &[HashMap<String, rbs::Value>],
+		related: Arc<Vec<HashMap<String, quaint::Value>>>,
 	) -> Result<(), Error>;
 }
 

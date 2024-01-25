@@ -58,7 +58,7 @@ pub trait Relationship {
 
 	#[doc(hidden)]
 	/// Match the eagerly loaded results to their parents. Not intended to be used directly.
-	fn r#match(&mut self, related: &[HashMap<String, Value>]) -> Result<(), Error>;
+	fn r#match(&mut self, related: Arc<Vec<HashMap<String, quaint::Value>>>) -> Result<(), Error>;
 
 	#[doc(hidden)]
 	/// Create an instance of the relationship. Not intended to be used directly.
@@ -118,7 +118,7 @@ impl<T: serde::Serialize> serde::Serialize for Status<T> {
 }
 
 fn find_related<M: Model, T: serde::Serialize>(
-	related: &[HashMap<String, Value>],
+	related: Arc<Vec<HashMap<String, quaint::Value>>>,
 	foreign_key: &str,
 	value: T,
 	wants_one: bool,
@@ -126,7 +126,6 @@ fn find_related<M: Model, T: serde::Serialize>(
 	let value = value::for_db(value)?;
 
 	let related = related
-		.iter()
 		.filter(|model| {
 			model
 				.get(foreign_key)

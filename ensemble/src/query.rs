@@ -1,37 +1,39 @@
-use itertools::Itertools;
-use rbs::Value;
-use serde::Serialize;
+use quaint::{
+	ast::*,
+	connector::{Queryable, ResultRow},
+	Value,
+};
 use std::{
 	collections::{HashMap, HashSet},
-	fmt::Display,
+	sync::Arc,
 };
 
 use crate::{
-	connection::{self, Database},
-	value, Error, Model,
+	connection::{self},
+	Error, Model,
 };
 
 /// The Query Builder.
 #[derive(Debug)]
-pub struct Builder {
+pub struct Builder<'a> {
 	table: String,
-	join: Vec<Join>,
-	order: Vec<Order>,
+	order: Ordering<'a>,
+	join: Vec<Join<'a>>,
 	limit: Option<usize>,
 	offset: Option<usize>,
-	r#where: Vec<WhereClause>,
 	eager_load: HashSet<String>,
+	conditions: Option<ConditionTree<'a>>,
 }
 
-impl Builder {
+impl<'a> Builder<'a> {
 	pub(crate) fn new(table: String) -> Self {
 		Self {
 			table,
 			limit: None,
 			offset: None,
 			join: vec![],
-			order: vec![],
-			r#where: vec![],
+			conditions: None,
+			order: Ordering::default(),
 			eager_load: HashSet::new(),
 		}
 	}
@@ -46,12 +48,13 @@ impl Builder {
 	/// # Errors
 	///
 	/// Returns an error if the query fails, or if a connection to the database cannot be established.
-	pub async unsafe fn raw_sql(sql: &str, bindings: Vec<Value>) -> Result<Vec<Value>, Error> {
-		let mut conn = connection::get().await?;
+	pub async unsafe fn raw_sql(
+		sql: &str,
+		bindings: &[Value<'_>],
+	) -> Result<impl Iterator<Item = ResultRow>, Error> {
+		let conn = connection::get().await?;
 
-		conn.get_values(sql, bindings)
-			.await
-			.map_err(|e| Error::Database(e.to_string()))
+		Ok(conn.query_raw(sql, bindings).await?.into_iter())
 	}
 
 	/// Set the table which the query is targeting.
@@ -87,17 +90,11 @@ impl Builder {
 	///
 	/// Panics if the provided value cannot be serialized.
 	#[must_use]
-	pub fn r#where<T, Op>(mut self, column: &str, operator: Op, value: T) -> Self
-	where
-		Op: Into<Operator>,
-		T: serde::Serialize,
-	{
-		self.r#where.push(WhereClause::Simple(Where {
-			boolean: Boolean::And,
-			operator: operator.into(),
-			column: Columns::escape(column),
-			value: Some(value::for_db(value).unwrap()),
-		}));
+	pub fn r#where(mut self, condition: Compare<'a>) -> Self {
+		self.conditions = Some(match self.conditions {
+			None => condition.into(),
+			Some(previous) => previous.and(condition),
+		});
 
 		self
 	}
@@ -130,167 +127,62 @@ impl Builder {
 	///
 	/// Panics if this is the first where clause.
 	#[must_use]
-	pub fn or_where<T, Op>(mut self, column: &str, op: Op, value: T) -> Self
-	where
-		T: Into<Value>,
-		Op: Into<Operator>,
-	{
-		assert!(
-			!self.r#where.is_empty(),
-			"Cannot use or_where without a where clause."
-		);
+	pub fn or_where(mut self, condition: Compare<'a>) -> Self {
+		let Some(previous) = self.conditions else {
+			panic!("Cannot use or_where without a where clause.");
+		};
 
-		self.r#where.push(WhereClause::Simple(Where {
-			operator: op.into(),
-			boolean: Boolean::Or,
-			value: Some(value.into()),
-			column: Columns::escape(column),
-		}));
-
-		self
-	}
-
-	/// Add a "where not null" clause to the query.
-	#[must_use]
-	pub fn where_not_null(mut self, column: &str) -> Self {
-		self.r#where.push(WhereClause::Simple(Where {
-			value: None,
-			boolean: Boolean::And,
-			operator: Operator::NotNull,
-			column: Columns::escape(column),
-		}));
-
-		self
-	}
-
-	// Add a "where in" clause to the query.
-	#[must_use]
-	pub fn where_in<T>(mut self, column: &str, values: Vec<T>) -> Self
-	where
-		T: Into<Value>,
-	{
-		self.r#where.push(WhereClause::Simple(Where {
-			boolean: Boolean::And,
-			operator: Operator::In,
-			column: Columns::escape(column),
-			value: Some(Value::Array(values.into_iter().map(Into::into).collect())),
-		}));
-
-		self
-	}
-
-	/// Add a "where is null" clause to the query.
-	#[must_use]
-	pub fn where_null(mut self, column: &str) -> Self {
-		self.r#where.push(WhereClause::Simple(Where {
-			value: None,
-			boolean: Boolean::And,
-			operator: Operator::IsNull,
-			column: Columns::escape(column),
-		}));
+		self.conditions = Some(previous.or(condition));
 
 		self
 	}
 
 	/// Add an inner join to the query.
+	///
+	/// # Example
+	///
+	/// ```
+	/// # use ensemble::query::Builder;
+	/// # let query = Builder::new("users".to_string());
+	/// query.join("articles", col!("articles", "user_id").equals(col!("users", "id")))
+	/// ```
 	#[must_use]
-	pub fn join<Op: Into<Operator>>(
-		mut self,
-		column: &str,
-		first: &str,
-		op: Op,
-		second: &str,
-	) -> Self {
-		self.join.push(Join {
-			operator: op.into(),
-			r#type: JoinType::Inner,
-			first: first.to_string(),
-			second: second.to_string(),
-			column: Columns::escape(column),
-		});
+	pub fn join<T: Into<ConditionTree<'a>>>(mut self, table: &'a str, condition: T) -> Self {
+		self.join.push(Join::Inner(table.on(condition)));
+
+		self
+	}
+
+	/// Add a left join to the query.
+	#[must_use]
+	pub fn left_join<T: Into<ConditionTree<'a>>>(mut self, table: &'a str, condition: T) -> Self {
+		self.join.push(Join::Left(table.on(condition)));
+
+		self
+	}
+
+	/// Add a right join to the query.
+	#[must_use]
+	pub fn right_join<T: Into<ConditionTree<'a>>>(mut self, table: &'a str, condition: T) -> Self {
+		self.join.push(Join::Right(table.on(condition)));
+
+		self
+	}
+
+	/// Add a full join to the query.
+	#[must_use]
+	pub fn full_join<T: Into<ConditionTree<'a>>>(mut self, table: &'a str, condition: T) -> Self {
+		self.join.push(Join::Full(table.on(condition)));
 
 		self
 	}
 
 	/// Add an "order by" clause to the query.
 	#[must_use]
-	pub fn order_by<Dir: Into<Direction>>(mut self, column: &str, direction: Dir) -> Self {
-		self.order.push(Order {
-			direction: direction.into(),
-			column: Columns::escape(column),
-		});
+	pub fn order_by<T: IntoOrderDefinition<'a>>(mut self, ordering: T) -> Self {
+		self.order = self.order.append(ordering.into_order_definition());
 
 		self
-	}
-
-	/// Logically group a set of where clauses.
-	#[must_use]
-	pub fn where_group(mut self, r#fn: impl FnOnce(Self) -> Self) -> Self {
-		let builder = r#fn(Self::new(self.table.clone()));
-
-		self.r#where
-			.push(WhereClause::Group(builder.r#where, Boolean::And));
-
-		self
-	}
-
-	/// Get the SQL representation of the query.
-	#[must_use]
-	pub fn to_sql(&self, r#type: Type) -> String {
-		let mut sql = match r#type {
-			Type::Update => String::new(), // handled in update()
-			Type::Delete => format!("DELETE FROM {}", self.table),
-			Type::Select => format!("SELECT * FROM {}", self.table),
-			Type::Count => format!("SELECT COUNT(*) FROM {}", self.table),
-		};
-
-		if !self.join.is_empty() {
-			for join in &self.join {
-				sql.push_str(&format!(
-					" {} {} ON {} {} {}",
-					join.r#type, join.column, join.first, join.operator, join.second
-				));
-			}
-		}
-
-		if !self.r#where.is_empty() {
-			sql.push_str(" WHERE ");
-
-			for (i, where_clause) in self.r#where.iter().enumerate() {
-				sql.push_str(&where_clause.to_sql(i != 0));
-			}
-		}
-
-		if !self.order.is_empty() {
-			sql.push_str(" ORDER BY ");
-
-			sql.push_str(
-				&self
-					.order
-					.iter()
-					.map(|order| format!("{} {}", order.column, order.direction))
-					.join(", "),
-			);
-		}
-
-		if let Some(take) = self.limit {
-			sql.push_str(&format!(" LIMIT {take}"));
-		}
-
-		if let Some(skip) = self.offset {
-			sql.push_str(&format!(" OFFSET {skip}"));
-		}
-
-		sql
-	}
-
-	/// Get the current query value bindings.
-	#[must_use]
-	pub fn get_bindings(&self) -> Vec<Value> {
-		self.r#where
-			.iter()
-			.flat_map(WhereClause::get_bindings)
-			.collect()
 	}
 
 	/// Retrieve the number of records that match the query constraints.
@@ -299,23 +191,18 @@ impl Builder {
 	///
 	/// Returns an error if the query fails, or if a connection to the database cannot be established.
 	pub async fn count(self) -> Result<u64, Error> {
-		let mut conn = connection::get().await?;
+		let conn = connection::get().await?;
 
 		let values = conn
-			.get_values(&self.to_sql(Type::Count), self.get_bindings())
-			.await
-			.map_err(|e| Error::Database(e.to_string()))?;
+			.select(Select::from(&self).value(count(asterisk()).alias("count")))
+			.await?;
 
 		values
-			.first()
-			.and_then(|m| m.as_map())
-			.and_then(|m| m.first())
-			.and_then(|(_, v)| v.as_u64())
-			.ok_or_else(|| {
-				Error::Serialization(rbs::value::ext::Error::Syntax(
-					"Failed to parse count value".to_string(),
-				))
-			})
+			.into_single()?
+			.get("count")
+			.and_then(|v| v.as_integer())
+			.map(|i| i as u64)
+			.ok_or(Error::InvalidQuery)
 	}
 
 	/// Execute the query and return the first result.
@@ -336,31 +223,27 @@ impl Builder {
 	///
 	/// Returns an error if the query fails, or if a connection to the database cannot be established.
 	pub async fn get<M: Model>(self) -> Result<Vec<M>, Error> {
-		let mut models = self
-			._get()
-			.await?
-			.into_iter()
-			.map(value::from::<M>)
-			.collect::<Result<Vec<M>, rbs::Error>>()?;
+		let eager_load = self.eager_load.clone();
 
-		if models.is_empty() || self.eager_load.is_empty() {
+		let conn = connection::get().await?;
+		let mut models: Vec<M> = quaint::serde::from_rows(conn.select(Select::from(&self)).await?)?;
+
+		if models.is_empty() || eager_load.is_empty() {
 			return Ok(models);
 		}
 
 		let model = M::default();
-		for relation in self.eager_load {
+		for relation in eager_load {
 			tracing::trace!(
 				"Eager loading {relation} relation for {} models",
 				models.len()
 			);
 
-			let rows = model
-				.eager_load(&relation, models.iter().collect::<Vec<&M>>().as_slice())
-				.get_rows()
-				.await?;
+			let query = model.eager_load(&relation, models.iter());
+			let rows = Arc::new(query.get_rows().await?);
 
 			for model in &mut models {
-				model.fill_relation(&relation, &rows)?;
+				model.fill_relation(&relation, rows.clone())?;
 			}
 		}
 
@@ -372,21 +255,11 @@ impl Builder {
 	/// # Errors
 	///
 	/// Returns an error if the query fails, or if a connection to the database cannot be established.
-	pub(crate) async fn get_rows(&self) -> Result<Vec<HashMap<String, Value>>, Error> {
-		let values = self
-			._get()
-			.await?
-			.into_iter()
-			.map(|v| {
-				let Value::Map(map) = v else { unreachable!() };
+	pub(crate) async fn get_rows(&self) -> Result<Vec<HashMap<String, Value<'static>>>, Error> {
+		let conn = connection::get().await?;
+		let values = conn.select(Select::from(self.to_owned())).await?;
 
-				map.into_iter()
-					.map(|(k, v)| (k.into_string().unwrap_or_else(|| unreachable!()), v))
-					.collect()
-			})
-			.collect();
-
-		Ok(values)
+		Ok(values.into())
 	}
 
 	/// Insert a new record into the database. Returns the ID of the inserted record, if applicable.
@@ -394,39 +267,29 @@ impl Builder {
 	/// # Errors
 	///
 	/// Returns an error if the query fails, or if a connection to the database cannot be established.
-	pub async fn insert<Id: for<'de> serde::Deserialize<'de>, T: Into<Columns> + Send>(
+	pub async fn insert<Id: From<Value<'a>>, T: Into<Columns<'a>> + Send>(
 		&self,
 		columns: T,
-	) -> Result<Option<Id>, Error> {
+	) -> Result<Option<u64>, Error> {
 		if self.limit.is_some()
 			|| !self.join.is_empty()
 			|| !self.order.is_empty()
-			|| !self.r#where.is_empty()
+			|| self.conditions.is_some()
 		{
 			return Err(Error::InvalidQuery);
 		}
 
-		let mut conn = connection::get().await?;
-		let values: Vec<(String, Value)> = columns.into().0;
+		let columns: Vec<(String, Value)> = columns.into().0;
+		let mut insert = Insert::single_into(&self.table);
 
-		let (sql, bindings) = (
-			format!(
-				"INSERT INTO {} ({}) VALUES ({})",
-				self.table,
-				values.iter().map(|(column, _)| column).join(", "),
-				values.iter().map(|_| "?").join(", ")
-			),
-			values.into_iter().map(|(_, value)| value).collect(),
-		);
+		for column in columns {
+			insert = insert.value(column.0, column.1);
+		}
 
-		tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Executing INSERT SQL query");
+		let conn = connection::get().await?;
+		let result = conn.insert(insert.into()).await?;
 
-		let result = conn
-			.exec(&sql, bindings)
-			.await
-			.map_err(|e| Error::Database(e.to_string()))?;
-
-		Ok(rbs::from_value(result.last_insert_id).ok())
+		Ok(result.last_insert_id())
 	}
 
 	/// Increment a column's value by a given amount. Returns the number of affected rows.
@@ -434,26 +297,14 @@ impl Builder {
 	/// # Errors
 	///
 	/// Returns an error if the query fails, or if a connection to the database cannot be established.
-	pub async fn increment(self, column: &str, amount: u64) -> Result<u64, Error> {
-		let mut conn = connection::get().await?;
-		let (sql, mut bindings) = (
-			format!(
-				"UPDATE {} SET {} = {} + ? {}",
-				self.table,
-				Columns::escape(column),
-				Columns::escape(column),
-				self.to_sql(Type::Update)
-			),
-			self.get_bindings(),
+	pub async fn increment(self, column: &str, amount: i64) -> Result<u64, Error> {
+		let query = Update::from(&self).set(
+			column,
+			SqlOp::Add(Column::from(column).into(), amount.into()),
 		);
-		bindings.insert(0, amount.into());
+		let mut conn = connection::get().await?;
 
-		tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Executing UPDATE SQL query for increment");
-
-		conn.exec(&sql, bindings)
-			.await
-			.map_err(|e| Error::Database(e.to_string()))
-			.map(|r| r.rows_affected)
+		Ok(conn.update(query).await?)
 	}
 
 	/// Update records in the database. Returns the number of affected rows.
@@ -461,50 +312,47 @@ impl Builder {
 	/// # Errors
 	///
 	/// Returns an error if the query fails, or if a connection to the database cannot be established.
-	pub async fn update<T: Into<Columns> + Send>(self, values: T) -> Result<u64, Error> {
-		let mut conn = connection::get().await?;
+	pub async fn update<T: Into<Columns<'a>> + Send>(self, values: T) -> Result<u64, Error> {
+		if !self.join.is_empty()
+			|| !self.order.is_empty()
+			|| self.offset.is_some()
+			|| self.limit.is_some()
+		{
+			return Err(Error::InvalidQuery);
+		}
+
+		let mut query = Update::from(&self);
 		let values: Vec<(String, Value)> = values.into().0;
 
-		let (sql, bindings) = (
-			format!(
-				"UPDATE {} SET {} {}",
-				self.table,
-				values
-					.iter()
-					.map(|(column, _)| format!("{column} = ?"))
-					.join(", "),
-				self.to_sql(Type::Update)
-			),
-			values
-				.iter()
-				.map(|(_, value)| value.clone())
-				.chain(self.get_bindings())
-				.collect(),
-		);
+		for (column, value) in values {
+			query = query.set(column, value);
+		}
 
-		tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Executing UPDATE SQL query");
+		let conn = connection::get().await?;
 
-		conn.exec(&sql, bindings)
-			.await
-			.map_err(|e| Error::Database(e.to_string()))
-			.map(|r| r.rows_affected)
+		Ok(conn.update(query).await?)
 	}
 
-	/// Delete records from the database. Returns the number of affected rows.
+	/// Delete records from the database.
 	///
 	/// # Errors
 	///
 	/// Returns an error if the query fails, or if a connection to the database cannot be established.
-	pub async fn delete(self) -> Result<u64, Error> {
-		let mut conn = connection::get().await?;
-		let (sql, bindings) = (self.to_sql(Type::Delete), self.get_bindings());
+	pub async fn delete(self) -> Result<(), Error> {
+		if !self.join.is_empty()
+			|| !self.order.is_empty()
+			|| self.offset.is_some()
+			|| self.limit.is_some()
+		{
+			return Err(Error::InvalidQuery);
+		}
 
-		tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Executing DELETE SQL query");
+		let query = Delete::from(&self);
+		let conn = connection::get().await?;
 
-		conn.exec(&sql, bindings)
-			.await
-			.map_err(|e| Error::Database(e.to_string()))
-			.map(|r| r.rows_affected)
+		conn.delete(query).await?;
+
+		Ok(())
 	}
 
 	/// Run a truncate statement on the table. Returns the number of affected rows.
@@ -513,31 +361,11 @@ impl Builder {
 	///
 	/// Returns an error if the query fails, or if a connection to the database cannot be established.
 	pub async fn truncate(self) -> Result<u64, Error> {
-		let mut conn = connection::get().await?;
-		let sql = format!("TRUNCATE TABLE {}", self.table);
+		let conn = connection::get().await?;
 
-		tracing::debug!(sql = sql.as_str(), "Executing TRUNCATE SQL query");
-
-		conn.exec(&sql, vec![])
-			.await
-			.map_err(|e| Error::Database(e.to_string()))
-			.map(|r| r.rows_affected)
-	}
-}
-
-impl Builder {
-	async fn _get(&self) -> Result<Vec<Value>, Error> {
-		let mut conn = connection::get().await?;
-		let (sql, bindings) = (self.to_sql(Type::Select), self.get_bindings());
-
-		tracing::debug!(sql = sql.as_str(), bindings = ?bindings, "Executing SELECT SQL query");
-
-		let values = conn
-			.get_values(&sql, bindings)
-			.await
-			.map_err(|s| Error::Database(s.to_string()))?;
-
-		Ok(values)
+		Ok(conn
+			.execute_raw("TRUNCATE TABLE ?", &[self.table.into()])
+			.await?)
 	}
 }
 
@@ -568,317 +396,72 @@ impl From<Vec<&str>> for EagerLoad {
 	}
 }
 
-pub struct Columns(Vec<(String, Value)>);
+pub struct Columns<'a>(Vec<(String, Value<'a>)>);
 
-impl Columns {
-	fn escape(column: &str) -> String {
-		let parts = column.split('.');
-
-		match connection::which_db() {
-			Database::MySQL => parts
-				.map(|part| format!("`{part}`"))
-				.collect::<Vec<String>>()
-				.join("."),
-			Database::PostgreSQL => parts
-				.map(|part| format!("\"{part}\""))
-				.collect::<Vec<String>>()
-				.join("."),
-		}
-	}
-}
-
-#[allow(clippy::fallible_impl_from)]
-impl From<Value> for Columns {
-	fn from(value: Value) -> Self {
-		match value {
-			Value::Map(map) => Self(
-				map.into_iter()
-					.map(|(column, value)| (Self::escape(&column.into_string().unwrap()), value))
-					.collect(),
-			),
-			_ => panic!("The provided value is not a map."),
-		}
-	}
-}
-
-impl<T: Serialize> From<Vec<(&str, T)>> for Columns {
+impl<'a, T: Into<Value<'a>>> From<Vec<(&str, T)>> for Columns<'a> {
 	fn from(values: Vec<(&str, T)>) -> Self {
 		Self(
 			values
-				.iter()
-				.map(|(column, value)| (Self::escape(column), value::for_db(value).unwrap()))
-				.collect(),
-		)
-	}
-}
-impl<T: Serialize> From<&[(&str, T)]> for Columns {
-	fn from(values: &[(&str, T)]) -> Self {
-		Self(
-			values
-				.iter()
-				.map(|(column, value)| (Self::escape(column), value::for_db(value).unwrap()))
-				.collect(),
-		)
-	}
-}
-
-/// Available sort directions.
-#[derive(Debug)]
-pub enum Direction {
-	Ascending,
-	Descending,
-}
-
-impl Display for Direction {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Ascending => write!(f, "ASC"),
-			Self::Descending => write!(f, "DESC"),
-		}
-	}
-}
-
-impl From<String> for Direction {
-	fn from(value: String) -> Self {
-		value.as_str().into()
-	}
-}
-
-#[allow(clippy::fallible_impl_from)]
-impl From<&str> for Direction {
-	fn from(value: &str) -> Self {
-		match value.to_uppercase().as_str() {
-			"ASC" | "ASCENDING" => Self::Ascending,
-			"DESC" | "DESCENDING" => Self::Descending,
-
-			_ => panic!("Invalid direction {value}"),
-		}
-	}
-}
-
-/// An order clause.
-#[derive(Debug)]
-struct Order {
-	column: String,
-	direction: Direction,
-}
-
-/// Available join types.
-#[derive(Debug)]
-enum JoinType {
-	/// The `INNER JOIN` type.
-	Inner,
-}
-
-impl Display for JoinType {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Inner => write!(f, "INNER JOIN"),
-		}
-	}
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Type {
-	Count,
-	Select,
-	Update,
-	Delete,
-}
-
-/// A join clause.
-#[derive(Debug)]
-struct Join {
-	column: String,
-	first: String,
-	second: String,
-	r#type: JoinType,
-	operator: Operator,
-}
-
-#[derive(Debug)]
-enum WhereClause {
-	Simple(Where),
-	Group(Vec<WhereClause>, Boolean),
-}
-
-impl WhereClause {
-	fn to_sql(&self, add_boolean: bool) -> String {
-		match self {
-			Self::Simple(where_clause) => where_clause.to_sql(add_boolean),
-			Self::Group(where_clauses, boolean) => {
-				let mut sql = String::new();
-
-				for (i, where_clause) in where_clauses.iter().enumerate() {
-					sql.push_str(&where_clause.to_sql(i != 0));
-				}
-
-				if add_boolean {
-					format!(" {boolean} ({sql})")
-				} else {
-					format!("({sql})")
-				}
-			},
-		}
-	}
-
-	fn get_bindings(&self) -> Vec<Value> {
-		match self {
-			Self::Simple(where_clause) => where_clause
-				.value
-				.clone()
 				.into_iter()
-				.flat_map(|v| match v {
-					Value::Array(array) => array,
-					_ => vec![v],
-				})
+				.map(|(column, value)| (column.to_string(), value.into()))
 				.collect(),
-			Self::Group(where_clauses, _) => {
-				where_clauses.iter().flat_map(Self::get_bindings).collect()
-			},
-		}
-	}
-}
-
-/// A where clause.
-#[derive(Debug)]
-struct Where {
-	column: String,
-	boolean: Boolean,
-	operator: Operator,
-	value: Option<Value>,
-}
-
-impl Where {
-	fn to_sql(&self, add_boolean: bool) -> String {
-		let sql = format!(
-			"{} {} {}",
-			self.column,
-			self.operator,
-			self.value.as_ref().map_or_else(String::new, |value| {
-				value.as_array().map_or_else(
-					|| "?".to_string(),
-					|value| format!("({})", value.iter().map(|_| "?").join(", ")),
-				)
-			})
-		);
-
-		if add_boolean {
-			format!(" {} {sql} ", self.boolean)
-		} else {
-			sql
-		}
-	}
-}
-
-/// Available operators for where clauses.
-#[derive(Debug)]
-pub enum Operator {
-	/// The `IN` operator.
-	In,
-	/// The `LIKE` operator.
-	Like,
-	/// The `NOT IN` operator.
-	NotIn,
-	/// The `=` operator.
-	Equals,
-	/// The `IS NULL` operator.
-	IsNull,
-	/// The `IS NOT NULL` operator.
-	NotNull,
-	/// The `BETWEEN` operator.
-	Between,
-	/// The `NOT LIKE` operator.
-	NotLike,
-	/// The `<` operator.
-	LessThan,
-	/// The `<>` operator.
-	NotEquals,
-	/// The `NOT BETWEEN` operator.
-	NotBetween,
-	/// The `>` operator.
-	GreaterThan,
-	/// The `<=` operator.
-	LessOrEqual,
-	/// The `>=` operator.
-	GreaterOrEqual,
-}
-
-impl Display for Operator {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"{}",
-			match self {
-				Self::In => "IN",
-				Self::Equals => "=",
-				Self::Like => "LIKE",
-				Self::LessThan => "<",
-				Self::NotIn => "NOT IN",
-				Self::NotEquals => "<>",
-				Self::GreaterThan => ">",
-				Self::LessOrEqual => "<=",
-				Self::IsNull => "IS NULL",
-				Self::Between => "BETWEEN",
-				Self::NotLike => "NOT LIKE",
-				Self::GreaterOrEqual => ">=",
-				Self::NotNull => "IS NOT NULL",
-				Self::NotBetween => "NOT BETWEEN",
-			}
 		)
 	}
 }
 
-impl From<String> for Operator {
-	fn from(value: String) -> Self {
-		value.as_str().into()
-	}
-}
-impl From<char> for Operator {
-	fn from(value: char) -> Self {
-		value.to_string().into()
-	}
-}
+impl<'a> From<&Builder<'a>> for Select<'a> {
+	fn from(value: &Builder<'a>) -> Self {
+		let mut select = Self::from_table(value.table.clone());
 
-#[allow(clippy::fallible_impl_from)]
-impl From<&str> for Operator {
-	fn from(value: &str) -> Self {
-		match value.to_uppercase().as_str() {
-			"IN" => Self::In,
-			"=" => Self::Equals,
-			"LIKE" => Self::Like,
-			"<" => Self::LessThan,
-			"NOT IN" => Self::NotIn,
-			"!=" => Self::NotEquals,
-			">" => Self::GreaterThan,
-			"<=" => Self::LessOrEqual,
-			"BETWEEN" => Self::Between,
-			"NOT LIKE" => Self::NotLike,
-			">=" => Self::GreaterOrEqual,
-			"NOT BETWEEN" => Self::NotBetween,
-
-			_ => panic!("Invalid operator {value}"),
+		if let Some(conditions) = value.conditions.clone() {
+			select = select.so_that(conditions);
 		}
-	}
-}
 
-#[derive(Debug, Clone, Copy)]
-enum Boolean {
-	And,
-	Or,
-}
-
-impl Display for Boolean {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Or => write!(f, "OR"),
-			Self::And => write!(f, "AND"),
+		for join in value.join.clone() {
+			select = match join {
+				Join::Full(join) => select.full_join(join),
+				Join::Left(join) => select.left_join(join),
+				Join::Inner(join) => select.inner_join(join),
+				Join::Right(join) => select.right_join(join),
+			}
 		}
+
+		for ordering in value.order.0.clone() {
+			select = select.order_by(ordering);
+		}
+
+		if let Some(limit) = value.limit {
+			select = select.limit(limit);
+		}
+
+		if let Some(offset) = value.offset {
+			select = select.offset(offset);
+		}
+
+		select
 	}
 }
 
-impl AsRef<Self> for Builder {
-	fn as_ref(&self) -> &Self {
-		self
+impl<'a> From<&Builder<'a>> for Update<'a> {
+	fn from(value: &Builder<'a>) -> Self {
+		let mut update = Self::table(value.table.clone());
+
+		if let Some(conditions) = value.conditions.clone() {
+			update = update.so_that(conditions);
+		}
+
+		update
+	}
+}
+
+impl<'a> From<&Builder<'a>> for Delete<'a> {
+	fn from(value: &Builder<'a>) -> Self {
+		let mut delete = Self::from_table(value.table.clone());
+
+		if let Some(conditions) = value.conditions.clone() {
+			delete = delete.so_that(conditions);
+		}
+
+		delete
 	}
 }

@@ -90,7 +90,7 @@ fn impl_fill_relation(fields: &Fields) -> TokenStream {
 	});
 
 	quote! {
-		fn fill_relation(&mut self, relation: &str, related: &[::std::collections::HashMap<::std::string::String, ::ensemble::rbs::Value>]) -> Result<(), ::ensemble::Error> {
+		fn fill_relation(&mut self, relation: &str, related: std::sync::Arc<std::vec::Vec<std::collections::HashMap<std::string::String, ensemble::Value<'_>>>>) -> Result<(), ::ensemble::Error> {
 			match relation {
 				#(#fill_relation)*
 				_ => panic!("Model does not have a {relation} relation"),
@@ -105,13 +105,15 @@ fn impl_eager_load(fields: &Fields) -> TokenStream {
         let ident = &field.ident;
 
         quote_spanned! {field.span() =>
-            stringify!(#ident) => self.#ident.eager_query(related.iter().map(|model| &model.#ident.value).cloned().collect()),
+            stringify!(#ident) => self.#ident.eager_query(related.map(|model| &model.#ident.value).cloned().collect()),
         }
     });
 
 	quote! {
 		#[allow(clippy::cloned_instead_of_copied)]
-		fn eager_load(&self, relation: &str, related: &[&Self]) -> ::ensemble::query::Builder {
+		fn eager_load<'a>(&self, relation: &str, related: impl Iterator<Item = &'a Self>) -> ::ensemble::query::Builder
+		where
+			Self: 'a {
 			match relation {
 				#(#eager_loads)*
 				_ => panic!("Model does not have a {relation} relation"),
@@ -193,7 +195,7 @@ fn impl_save(fields: &Fields, primary_key: &Field) -> TokenStream {
 			#run_validation
 
 			let rows_affected = Self::query()
-				.r#where(Self::PRIMARY_KEY, "=", &self.#ident)
+				.r#where(Self::PRIMARY_KEY.equals(&self.#ident))
 				.update(::ensemble::value::for_db(self)?)
 				.await?;
 
@@ -212,7 +214,7 @@ fn impl_find(primary_key: &Field) -> TokenStream {
 	quote! {
 		async fn find(#ident: Self::PrimaryKey) -> Result<Self, ::ensemble::Error> {
 			Self::query()
-				.r#where(Self::PRIMARY_KEY, "=", ::ensemble::value::for_db(#ident)?)
+				.r#where(Self::PRIMARY_KEY.equals(#ident))
 				.first()
 				.await?
 				.ok_or(::ensemble::Error::NotFound)
