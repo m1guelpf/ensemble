@@ -134,7 +134,6 @@ pub fn impl_deserialize(name: &Ident, fields: &Fields) -> syn::Result<TokenStrea
 		const _: () = {
 			use ensemble::Inflector;
 			use ::ensemble::serde as _serde;
-			use _serde::de::IntoDeserializer;
 			use ensemble::relationships::Relationship;
 
 			#[automatically_derived]
@@ -263,9 +262,9 @@ fn visitor_deserialize(
                 quote_spanned! {f.span()=> {
                     let key: &'static str = #relationship_expr.leak();
 
-                    let value: <#ty as ::ensemble::relationships::Relationship>::Key = _serde::de::Deserialize::deserialize::<_serde::__private::de::ContentDeserializer<'_, _serde::de::value::Error>>(
-                        __collect.remove(key).ok_or_else(|| _serde::de::Error::missing_field(key))?.clone().into_deserializer()
-                    ).unwrap();
+                    let value: <#ty as ::ensemble::relationships::Relationship>::Key = ::ensemble::rbs::from_value(
+                        __collect.remove(key).ok_or_else(|| _serde::de::Error::missing_field(key))?
+                    ).map_err(_serde::de::Error::custom)?;
 
                     value
                 }}
@@ -284,7 +283,7 @@ fn visitor_deserialize(
 
 	let init_collect = if needs_collect {
 		quote! {
-			let mut __collect = ::std::collections::HashMap::<String, _serde::__private::de::Content>::new();
+			let mut __collect = ::std::collections::HashMap::<String, ::ensemble::rbs::Value>::new();
 		}
 	} else {
 		TokenStream::new()
