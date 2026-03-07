@@ -882,3 +882,145 @@ impl AsRef<Self> for Builder {
 		self
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[cfg(any(
+		all(feature = "mysql", not(feature = "postgres")),
+		all(feature = "postgres", not(feature = "mysql"))
+	))]
+	fn normalize_sql(sql: &str) -> String {
+		sql.split_whitespace().collect::<Vec<_>>().join(" ")
+	}
+
+	#[cfg(all(feature = "mysql", not(feature = "postgres")))]
+	fn quote_identifier(part: &str) -> String {
+		format!("`{part}`")
+	}
+
+	#[cfg(all(feature = "postgres", not(feature = "mysql")))]
+	fn quote_identifier(part: &str) -> String {
+		format!("\"{part}\"")
+	}
+
+	#[cfg(any(
+		all(feature = "mysql", not(feature = "postgres")),
+		all(feature = "postgres", not(feature = "mysql"))
+	))]
+	fn quote_column(column: &str) -> String {
+		column
+			.split('.')
+			.map(quote_identifier)
+			.collect::<Vec<_>>()
+			.join(".")
+	}
+
+	#[test]
+	fn parses_direction_aliases() {
+		assert!(matches!(Direction::from("asc"), Direction::Ascending));
+		assert!(matches!(
+			Direction::from("descending"),
+			Direction::Descending
+		));
+		assert!(matches!(
+			Direction::from("DESC".to_string()),
+			Direction::Descending
+		));
+	}
+
+	#[test]
+	fn parses_operator_aliases() {
+		assert!(matches!(Operator::from("="), Operator::Equals));
+		assert!(matches!(Operator::from('>'), Operator::GreaterThan));
+		assert!(matches!(Operator::from("not like"), Operator::NotLike));
+		assert!(matches!(
+			Operator::from("NOT BETWEEN".to_string()),
+			Operator::NotBetween
+		));
+	}
+
+	#[tokio::test]
+	async fn insert_rejects_invalid_queries_before_opening_a_connection() {
+		let err = Builder::new("users".to_string())
+			.limit(1)
+			.insert::<u64, _>(rbs::to_value! { "name": "Alice", })
+			.await
+			.unwrap_err();
+
+		assert!(matches!(err, Error::InvalidQuery));
+	}
+
+	#[cfg(any(
+		all(feature = "mysql", not(feature = "postgres")),
+		all(feature = "postgres", not(feature = "mysql"))
+	))]
+	#[test]
+	fn builds_expected_select_sql_and_binding_order() {
+		let query = Builder::new("users".to_string())
+			.join("profiles", "users.id", "=", "profiles.user_id")
+			.r#where("users.active", "=", true)
+			.where_group(|builder| {
+				builder
+					.r#where("users.name", "=", "Alice")
+					.or_where("users.role", "=", "admin")
+			})
+			.where_in("users.id", vec![1_u64, 2_u64])
+			.order_by("users.name", "desc")
+			.limit(10)
+			.offset(20);
+
+		let expected_sql = format!(
+			"SELECT * FROM users INNER JOIN {} ON users.id = profiles.user_id \
+			 WHERE {} = ? AND ({} = ? OR {} = ? ) AND {} IN (?, ?) \
+			 ORDER BY {} DESC LIMIT 10 OFFSET 20",
+			quote_identifier("profiles"),
+			quote_column("users.active"),
+			quote_column("users.name"),
+			quote_column("users.role"),
+			quote_column("users.id"),
+			quote_column("users.name")
+		);
+
+		assert_eq!(
+			normalize_sql(&query.to_sql(Type::Select)),
+			normalize_sql(&expected_sql)
+		);
+		assert_eq!(
+			query.get_bindings(),
+			vec![
+				Value::Bool(true),
+				Value::String("Alice".to_string()),
+				Value::String("admin".to_string()),
+				Value::U64(1),
+				Value::U64(2),
+			]
+		);
+	}
+
+	#[cfg(any(
+		all(feature = "mysql", not(feature = "postgres")),
+		all(feature = "postgres", not(feature = "mysql"))
+	))]
+	#[test]
+	fn builds_expected_count_sql_for_null_checks() {
+		let query = Builder::new("users".to_string())
+			.r#where("users.active", "=", true)
+			.where_not_null("users.email")
+			.where_null("users.deleted_at");
+
+		let expected_sql = format!(
+			"SELECT COUNT(*) FROM users WHERE {} = ? AND {} IS NOT NULL AND {} IS NULL",
+			quote_column("users.active"),
+			quote_column("users.email"),
+			quote_column("users.deleted_at")
+		);
+
+		assert_eq!(
+			normalize_sql(&query.to_sql(Type::Count)),
+			normalize_sql(&expected_sql)
+		);
+		assert_eq!(query.get_bindings(), vec![Value::Bool(true)]);
+	}
+}

@@ -7,57 +7,45 @@ name: Continuous integration
 
 jobs:
   test:
-    name: Test Suite
+    name: Test (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: workspace-default
+            command: cargo test --workspace
+          - name: workspace-validator
+            command: cargo test --workspace --features validator
+          - name: workspace-all-features
+            command: cargo test --workspace --all-features
+          - name: ensemble-mysql-rustls
+            command: cargo test -p ensemble --lib --no-default-features --features "json schema uuid validator mysql rustls" -- --test-threads=1
+          - name: ensemble-postgres-rustls
+            command: cargo test -p ensemble --lib --no-default-features --features "json schema uuid validator postgres rustls" -- --test-threads=1
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: 🗄️ Setup Rust cache
-        uses: actions/cache@v2
-        with:
-          key: rust-cache
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git
-            ./target
+        uses: Swatinem/rust-cache@v2
       - name: 🦀 Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
+        uses: dtolnay/rust-toolchain@nightly
       - name: 🧪 Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
+        run: ${{ matrix.command }}
 
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: 🗄️ Setup Rust cache
-        uses: actions/cache@v2
+        uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@nightly
         with:
-          key: rust-cache-nightly
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git
-            ./target
-      - uses: actions-rs/toolchain@v1
-        with:
-          override: true
-          profile: minimal
-          toolchain: nightly
           components: rustfmt, clippy
       - name: 🧹 Format code
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: cargo fmt --all -- --check
       - name: 📎 Clippy
         uses: auguwu/clippy-action@1.2.2
         with:

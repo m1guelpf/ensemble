@@ -665,3 +665,148 @@ impl<'de, U: ValueBase<'de>> de::VariantAccess<'de> for VariantDeserializer<U> {
 		)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::deserialize_value;
+	use rbs::Value;
+	use serde::Deserialize;
+
+	#[derive(Debug, PartialEq, Deserialize)]
+	struct User {
+		id: u32,
+		name: String,
+	}
+
+	#[derive(Debug, PartialEq, Deserialize)]
+	struct Marker;
+
+	#[derive(Debug, PartialEq, Deserialize)]
+	enum Event {
+		Ready,
+		Message(String),
+		Numbers(Vec<u32>),
+		Pair(u32, u32),
+		Meta { code: u32 },
+	}
+
+	#[test]
+	fn deserializes_structs_from_maps_and_ext_wrappers() {
+		let value = rbs::to_value! {
+			"id": 7u32,
+			"name": "Alice",
+		};
+
+		assert_eq!(
+			deserialize_value::<User>(value.clone()).unwrap(),
+			User {
+				id: 7,
+				name: "Alice".to_string(),
+			}
+		);
+		assert_eq!(
+			deserialize_value::<User>(Value::Ext("Record", Box::new(value))).unwrap(),
+			User {
+				id: 7,
+				name: "Alice".to_string(),
+			}
+		);
+	}
+
+	#[test]
+	fn deserializes_none_options() {
+		assert_eq!(
+			deserialize_value::<Option<String>>(Value::Null).unwrap(),
+			None
+		);
+	}
+
+	#[test]
+	fn deserializes_some_options() {
+		assert_eq!(
+			deserialize_value::<Option<String>>(Value::String("hello".to_string())).unwrap(),
+			Some("hello".to_string())
+		);
+	}
+
+	#[test]
+	fn deserializes_binary_values() {
+		assert_eq!(
+			deserialize_value::<Value>(Value::Binary(vec![1, 2, 3])).unwrap(),
+			Value::Binary(vec![1, 2, 3])
+		);
+	}
+
+	#[test]
+	fn deserializes_enum_variants_from_supported_representations() {
+		assert_eq!(
+			deserialize_value::<Event>(Value::String("Ready".to_string())).unwrap(),
+			Event::Ready
+		);
+		assert_eq!(
+			deserialize_value::<Event>(Value::Array(vec![
+				Value::U32(1),
+				Value::String("boom".to_string()),
+			]))
+			.unwrap(),
+			Event::Message("boom".to_string())
+		);
+		assert_eq!(
+			deserialize_value::<Event>(Value::Array(vec![
+				Value::U32(2),
+				Value::Array(vec![Value::U32(1), Value::U32(2), Value::U32(3)]),
+			]))
+			.unwrap(),
+			Event::Numbers(vec![1, 2, 3])
+		);
+		assert_eq!(
+			deserialize_value::<Event>(Value::Array(vec![
+				Value::U32(3),
+				Value::Array(vec![Value::U32(9), Value::U32(4)]),
+			]))
+			.unwrap(),
+			Event::Pair(9, 4)
+		);
+		assert_eq!(
+			deserialize_value::<Event>(Value::Array(vec![
+				Value::U32(4),
+				rbs::to_value! { "code": 42u32, },
+			]))
+			.unwrap(),
+			Event::Meta { code: 42 }
+		);
+	}
+
+	#[test]
+	fn unit_struct_requires_an_empty_array() {
+		assert_eq!(
+			deserialize_value::<Marker>(Value::Array(vec![])).unwrap(),
+			Marker
+		);
+
+		let err = deserialize_value::<Marker>(Value::Array(vec![Value::U32(1)])).unwrap_err();
+
+		assert!(err.to_string().contains("empty array"));
+	}
+
+	#[test]
+	fn rejects_invalid_enum_shapes() {
+		let err = deserialize_value::<Event>(Value::Array(vec![
+			Value::U32(0),
+			Value::U32(1),
+			Value::U32(2),
+		]))
+		.unwrap_err();
+		assert!(err.to_string().contains("array with one or two elements"));
+
+		let err = deserialize_value::<Event>(Value::Array(vec![Value::U32(3)])).unwrap_err();
+		assert!(err.to_string().contains("tuple variant"));
+
+		let err = deserialize_value::<Event>(Value::Array(vec![
+			Value::U32(4),
+			Value::String("invalid".to_string()),
+		]))
+		.unwrap_err();
+		assert!(err.to_string().contains("struct variant"));
+	}
+}

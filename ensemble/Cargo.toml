@@ -40,7 +40,6 @@ postgres = ["dep:rbdc-pg"]
 json = ["ensemble_derive/json"]
 uuid = ["dep:uuid", "schemars?/uuid1"]
 rustls = ["rbdc-pg?/tls-rustls", "rbdc-mysql?/tls-rustls"]
-native-tls = ["rbdc-pg?/tls-native-tls", "rbdc-mysql?/tls-native-tls"]
 
 
 [package.metadata.docs.rs]
